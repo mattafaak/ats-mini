@@ -123,8 +123,8 @@ void useBand(const Band *band)
   // Wait a bit for things to calm down
   delay(100);
   // Clear signal strength readings
-  rssi = 0;
-  snr  = 0;
+  radioState.rssi = 0;
+  radioState.snr  = 0;
 }
 
 //
@@ -270,7 +270,7 @@ bool doSeek(int16_t enc, int16_t enca)
     {
       // Clear stale parameters
       clearStationInfo();
-      rssi = snr = 0;
+      radioState.rssi = radioState.snr = 0;
 
       // Clear stale abort state before starting seek
       consumeAbortPending();
@@ -431,15 +431,15 @@ bool processRssiSnr()
   if(!(updateCounter++ & 7))
   {
     // Show RSSI status only if this condition has changed
-    if(newRSSI != rssi)
+    if(newRSSI != radioState.rssi)
     {
-      rssi = newRSSI;
+      radioState.rssi = newRSSI;
       needRedraw = true;
     }
     // Show SNR status only if this condition has changed
-    if(newSNR != snr)
+    if(newSNR != radioState.snr)
     {
-      snr = newSNR;
+      radioState.snr = newSNR;
       needRedraw = true;
     }
   }

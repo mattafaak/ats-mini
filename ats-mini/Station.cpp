@@ -3,6 +3,7 @@
 #include "Utils.h"
 #include "Menu.h"
 #include "EIBI.h"
+#include "Draw.h"
 
 // CB frequency range
 #define MIN_CB_FREQUENCY 26060

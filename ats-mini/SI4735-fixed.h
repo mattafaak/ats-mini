@@ -1,3 +1,6 @@
+#ifndef SI4735_FIXED_H
+#define SI4735_FIXED_H
+
 #include <SI4735.h>
 
 class SI4735_fixed: public SI4735
@@ -103,3 +106,5 @@ class SI4735_fixed: public SI4735
     }
 #endif
 };
+
+#endif // SI4735_FIXED_H

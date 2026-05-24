@@ -526,7 +526,7 @@ static void clickScan(bool shortPress)
   {
     // Clear stale parameters
     clearStationInfo();
-    rssi = snr = 0;
+    radioState.rssi = radioState.snr = 0;
     drawScreen();
     drawMessage("Scanning...");
     scanRun(radioState.frequency, 10);

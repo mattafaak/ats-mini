@@ -1,6 +1,9 @@
 #ifndef DRAW_H
 #define DRAW_H
 
+#include <TFT_eSPI.h>
+#include <SI4735-fixed.h>
+
 // Display position control
 #define MENU_OFFSET_X    0    // Menu horizontal offset
 #define MENU_OFFSET_Y   18    // Menu vertical offset
@@ -59,5 +62,9 @@ void drawLayoutSmeter(const char *statusLine1, const char *statusLine2);
 
 void drawAbout();
 void drawAboutHelp(uint8_t arrow);
+
+extern SI4735_fixed rx;
+extern TFT_eSprite spr;
+extern TFT_eSPI tft;
 
 #endif /* DRAW_H */

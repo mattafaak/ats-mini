@@ -1,5 +1,6 @@
 #include "AudioManager.h"
 #include "Common.h"
+#include "Draw.h"
 #include <driver/gpio.h>
 
 //

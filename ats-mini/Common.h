@@ -133,6 +133,10 @@ typedef struct {
   int8_t   scrollDir;       // replaces scrollDirection (was uint8_t)
   int8_t   utcOffset;       // replaces utcOffsetIdx (was uint8_t)
   uint8_t  uiLayout;        // replaces uiLayoutIdx
+
+  // Signal quality
+  uint8_t rssi;
+  uint8_t snr;
 } RadioState;
 
 extern RadioState radioState;
@@ -223,16 +227,7 @@ typedef struct
 // Global Variables
 //
 
-extern SI4735_fixed rx;
-extern TFT_eSprite spr;
-extern TFT_eSPI tft;
-
-extern uint8_t rssi;
-extern uint8_t snr;
-
 extern volatile bool seekStop;
-
-extern const int CALMax;
 
 static inline bool isSSB() { return(radioState.mode>FM && radioState.mode<AM); }
 

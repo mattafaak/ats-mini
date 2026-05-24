@@ -48,9 +48,6 @@ volatile int16_t encoderCountAccel = 0;
 
 long elapsedSleep = millis();           // Display sleep timer
 
-// Signal quality (kept as standalone variables -- too short for safe global macros)
-uint8_t rssi = 0;
-uint8_t snr = 0;
 
 // Background screen refresh
 uint32_t background_timer = millis();   // Background screen refresh timer.

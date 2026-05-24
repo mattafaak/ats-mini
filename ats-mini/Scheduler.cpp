@@ -22,7 +22,7 @@ bool runScheduler(uint32_t currentTime)
 
   if((currentTime - lastRDSCheck) > RDS_CHECK_TIME)
   {
-    needRedraw |= (radioState.mode == FM) && (snr >= 12) && checkRds();
+    needRedraw |= (radioState.mode == FM) && (radioState.snr >= 12) && checkRds();
     lastRDSCheck = currentTime;
   }
 

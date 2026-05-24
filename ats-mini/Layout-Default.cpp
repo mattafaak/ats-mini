@@ -14,7 +14,7 @@ void drawLayoutDefault(const char *statusLine1, const char *statusLine2)
   drawSideBar(radioState.cmd, MENU_OFFSET_X, MENU_OFFSET_Y, MENU_DELTA_X);
 
   // Draw S-meter
-  drawSMeter(getStrength(rssi), METER_OFFSET_X, METER_OFFSET_Y);
+  drawSMeter(getStrength(radioState.rssi), METER_OFFSET_X, METER_OFFSET_Y);
 
   // Indicate FM pilot detection (stereo indicator)
   drawStereoIndicator(METER_OFFSET_X, METER_OFFSET_Y, (radioState.mode==FM) && rx.getCurrentPilot());

@@ -1,5 +1,6 @@
 #include "RadioDriver.h"
 #include "Common.h"
+#include "Draw.h"
 // Note: SI4735-fixed.h is already pulled in via Common.h and has no include guard,
 // so it must not be included here directly.
 

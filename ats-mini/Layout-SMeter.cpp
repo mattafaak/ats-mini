@@ -177,9 +177,9 @@ void drawLayoutSmeter(const char *statusLine1, const char *statusLine2)
     else
     {
       // Draw SN-meter
-      drawLargeSNMeter(snr, ALT_METER_OFFSET_X, ALT_METER_OFFSET_Y);
+      drawLargeSNMeter(radioState.snr, ALT_METER_OFFSET_X, ALT_METER_OFFSET_Y);
       // Draw S-meter
-      drawLargeSMeter(rssi, getInterpolatedStrength(rssi), ALT_METER_OFFSET_X, ALT_METER_OFFSET_Y);
+      drawLargeSMeter(radioState.rssi, getInterpolatedStrength(radioState.rssi), ALT_METER_OFFSET_X, ALT_METER_OFFSET_Y);
     }
   }
 }

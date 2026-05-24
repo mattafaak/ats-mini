@@ -4,6 +4,9 @@
 #include "Menu.h"
 #include "Tuning.h"
 #include "Draw.h"
+#include "Scan.h"
+#include "Station.h"
+#include "Storage.h"
 
 // Tuning delays after rx.setFrequency()
 #define TUNE_DELAY_DEFAULT 30
@@ -24,7 +27,7 @@ static struct
 } scanData[SCAN_POINTS];
 
 static uint32_t scanTime = millis();
-static uint8_t  scanStatus = SCAN_OFF;
+static uint8_t  scanState = SCAN_OFF;
 
 static uint16_t scanStartFreq;
 static uint16_t scanStep;
@@ -37,10 +40,22 @@ static uint8_t  scanMaxSNR;
 static inline uint8_t min(uint8_t a, uint8_t b) { return(a<b? a:b); }
 static inline uint8_t max(uint8_t a, uint8_t b) { return(a>b? a:b); }
 
+// Candidate for auto mode ranking
+typedef struct {
+  uint16_t freq;
+  uint8_t rssi;
+} Candidate;
+
+static int candidateDesc(const void *a, const void *b) {
+  return ((const Candidate*)b)->rssi - ((const Candidate*)a)->rssi;
+}
+
+ScanStatus scanStatus = {0};
+
 float scanGetRSSI(uint16_t freq)
 {
   // Input frequency must be in range of existing data
-  if((scanStatus!=SCAN_DONE) || (freq<scanStartFreq) || (freq>=scanStartFreq+scanStep*scanCount))
+  if((scanState!=SCAN_DONE) || (freq<scanStartFreq) || (freq>=scanStartFreq+scanStep*scanCount))
     return(0.0);
 
   uint8_t result = scanData[(freq - scanStartFreq) / scanStep].rssi;
@@ -50,7 +65,7 @@ float scanGetRSSI(uint16_t freq)
 float scanGetSNR(uint16_t freq)
 {
   // Input frequency must be in range of existing data
-  if((scanStatus!=SCAN_DONE) || (freq<scanStartFreq) || (freq>=scanStartFreq+scanStep*scanCount))
+  if((scanState!=SCAN_DONE) || (freq<scanStartFreq) || (freq>=scanStartFreq+scanStep*scanCount))
     return(0.0);
 
   uint8_t result = scanData[(freq - scanStartFreq) / scanStep].snr;
@@ -65,7 +80,7 @@ static void scanInit(uint16_t centerFreq, uint16_t step)
   scanMaxRSSI = 0;
   scanMinSNR  = 255;
   scanMaxSNR  = 0;
-  scanStatus  = SCAN_RUN;
+  scanState  = SCAN_RUN;
   scanTime    = millis();
 
   const Band *band = getCurrentBand();
@@ -85,7 +100,7 @@ static void scanInit(uint16_t centerFreq, uint16_t step)
 static bool scanTickTime()
 {
   // Scan must be on
-  if((scanStatus!=SCAN_RUN) || (scanCount>=SCAN_POINTS)) return(false);
+  if((scanState!=SCAN_RUN) || (scanCount>=SCAN_POINTS)) return(false);
 
   // Wait for the right time
   if(millis() - scanTime < SCAN_POLL_TIME) return(true);
@@ -125,7 +140,7 @@ static bool scanTickTime()
 
   // Set next frequency to scan or expire scan
   if((++scanCount >= SCAN_POINTS) || !isFreqInBand(getCurrentBand(), freq) || consumeAbortPending())
-    scanStatus = SCAN_DONE;
+    scanState = SCAN_DONE;
   else
     rx.setFrequency(freq); // Implies tuning delay
 
@@ -133,7 +148,7 @@ static bool scanTickTime()
   scanTime = millis() - SCAN_POLL_TIME;
 
   // Return current scan status
-  return(scanStatus==SCAN_RUN);
+  return(scanState==SCAN_RUN);
 }
 
 //
@@ -157,4 +172,245 @@ void scanRun(uint16_t centerFreq, uint16_t step)
   audioTempMute(false);
   // Restore tuning delay
   rx.setMaxDelaySetFrequency(TUNE_DELAY_DEFAULT);
+}
+
+//
+// Auto scan: sweep band, collect RSSI, rank top N, save to memory
+//
+void scanToMemoryAuto(uint8_t count) {
+  if (count > 20) count = 20;
+  if (count == 0) count = 10;
+
+  Band *band = getCurrentBand();
+  uint16_t step = getCurrentStep()->step;
+  if (radioState.mode != FM && step < 5) step = 5;
+
+  uint16_t origFreq = radioState.frequency;
+  int origBfo = radioState.bfo;
+
+  audioTempMute(true);
+  seekStop = false;
+  memset(&scanStatus, 0, sizeof(scanStatus));
+  scanStatus.running = SCAN_RUNNING;
+  scanStatus.mode = 0;
+
+  {
+    // Phase 1: sweep band collecting RSSI
+    uint16_t freq = band->minimumFreq;
+    uint16_t totalSteps = ((band->maximumFreq - band->minimumFreq) / step) + 1;
+    uint16_t stepCount = 0;
+    Candidate candidates[SCAN_POINTS];
+    uint16_t candidateCount = 0;
+
+    while (freq <= band->maximumFreq && stepCount < SCAN_POINTS) {
+      if (consumeAbortPending() || seekStop) {
+        scanStatus.running = SCAN_ABORTED;
+        goto restore;
+      }
+
+      if (isSSB()) updateBFO(0, true);
+      if (updateFrequency(freq, false)) {
+        uint32_t t = millis();
+        while ((millis() - t) < 80) {
+          rx.getCurrentReceivedSignalQuality();
+          if (rx.getCurrentRSSI() > 0) break;
+          delay(5);
+        }
+        rx.getCurrentReceivedSignalQuality();
+        if (candidateCount < SCAN_POINTS) {
+          candidates[candidateCount].freq = freq;
+          candidates[candidateCount].rssi = rx.getCurrentRSSI();
+          candidateCount++;
+        }
+        scanStatus.currentFreq = freq;
+        scanStatus.currentRSSI = rx.getCurrentRSSI();
+        scanStatus.currentSNR = rx.getCurrentSNR();
+      }
+
+      scanStatus.progress = (uint8_t)((uint32_t)stepCount * 50 / totalSteps);
+      freq += step;
+      stepCount++;
+    }
+
+    // Phase 2: sort by RSSI descending, take top N
+    qsort(candidates, candidateCount, sizeof(Candidate), candidateDesc);
+
+    uint8_t slot = 0;
+    for (int i = 0; i < MEMORY_COUNT; i++) {
+      if (memories[i].freq == 0) { slot = i; break; }
+    }
+
+    uint8_t written = 0;
+    for (int i = 0; i < candidateCount && written < count && slot < MEMORY_COUNT; i++) {
+      if (candidates[i].rssi == 0) continue;
+
+      updateFrequency(candidates[i].freq, false);
+      if (isSSB()) {
+        uint32_t fHz = (uint32_t)candidates[i].freq * 1000;
+        updateBFO(bfoFromHz(fHz), false);
+      }
+
+      // Station ID
+      char name[12] = "";
+      if (radioState.mode == FM) {
+        uint32_t rdsStart = millis();
+        while ((millis() - rdsStart) < 1500) {
+          checkRds();
+          const char *n = getStationName();
+          if (n && n[0] && n[0] != '*') { strlcpy(name, n, sizeof(name)); break; }
+          delay(100);
+        }
+      } else {
+        identifyFrequency(candidates[i].freq, false);
+        const char *n = getStationName();
+        if (n && n[0] && n[0] != '*') strlcpy(name, n, sizeof(name));
+      }
+
+      // Write to memory
+      uint32_t fHz = (uint32_t)candidates[i].freq * 1000;
+      memories[slot].freq = fHz;
+      memories[slot].band = bandIdx;
+      memories[slot].mode = radioState.mode;
+      strlcpy(memories[slot].name, name, sizeof(memories[slot].name));
+      prefsSaveMemory(slot, true);
+
+      scanStatus.results[written].slot = slot + 1;
+      scanStatus.results[written].freq = candidates[i].freq;
+      scanStatus.results[written].rssi = candidates[i].rssi;
+      strlcpy(scanStatus.results[written].name, name, 12);
+      written++;
+      slot++;
+    }
+
+    scanStatus.resultCount = written;
+    scanStatus.running = SCAN_DONE;
+  }
+
+restore:
+  updateFrequency(origFreq, false);
+  if (isSSB()) updateBFO(origBfo, false);
+  audioTempMute(false);
+  clearStationInfo();
+  identifyFrequency(getEffectiveFreq());
+}
+
+void scanToMemoryManual() {
+  Band *band = getCurrentBand();
+  uint16_t step = getCurrentStep()->step;
+  if (radioState.mode != FM && step < 5) step = 5;
+
+  memset(&scanStatus, 0, sizeof(scanStatus));
+  scanStatus.running = SCAN_RUNNING;
+  scanStatus.mode = 1;
+  scanStatus.currentFreq = band->minimumFreq;
+
+  audioTempMute(true);
+  seekStop = false;
+  if (isSSB()) updateBFO(0, true);
+  updateFrequency(scanStatus.currentFreq, false);
+  audioTempMute(false);
+}
+
+void scanManualStep() {
+  if (scanStatus.running != SCAN_RUNNING || scanStatus.mode != 1) return;
+
+  Band *band = getCurrentBand();
+  uint16_t step = getCurrentStep()->step;
+  if (radioState.mode != FM && step < 5) step = 5;
+
+  scanStatus.currentFreq += step;
+  if (scanStatus.currentFreq > band->maximumFreq) {
+    scanStatus.running = SCAN_DONE;
+    return;
+  }
+
+  audioTempMute(true);
+  if (isSSB()) updateBFO(0, true);
+  updateFrequency(scanStatus.currentFreq, false);
+  rx.getCurrentReceivedSignalQuality();
+  scanStatus.currentRSSI = rx.getCurrentRSSI();
+  scanStatus.currentSNR = rx.getCurrentSNR();
+  audioTempMute(false);
+
+  uint16_t range = band->maximumFreq - band->minimumFreq;
+  if (range) scanStatus.progress = (uint8_t)((uint32_t)(scanStatus.currentFreq - band->minimumFreq) * 100 / range);
+}
+
+void scanBookmark() {
+  if (scanStatus.running != SCAN_RUNNING || scanStatus.mode != 1) return;
+  if (scanStatus.bookmarkCount >= 20) return;
+  scanStatus.bookmarks[scanStatus.bookmarkCount++] = scanStatus.currentFreq;
+}
+
+void scanStop() {
+  if (scanStatus.running != SCAN_RUNNING) return;
+  scanStatus.running = SCAN_DONE;
+
+  uint8_t slot = 0;
+  for (int i = 0; i < MEMORY_COUNT; i++) {
+    if (memories[i].freq == 0) { slot = i; break; }
+  }
+
+  Band *band = getCurrentBand();
+  uint16_t origFreq = radioState.frequency;
+  int origBfo = radioState.bfo;
+  uint8_t written = 0;
+
+  audioTempMute(true);
+
+  for (int i = 0; i < scanStatus.bookmarkCount && slot < MEMORY_COUNT; i++, slot++) {
+    uint16_t freq = scanStatus.bookmarks[i];
+    if (isSSB()) updateBFO(0, true);
+    if (!updateFrequency(freq, false)) continue;
+
+    char name[12] = "";
+    if (radioState.mode == FM) {
+      clearStationInfo();
+      uint32_t rdsStart = millis();
+      while ((millis() - rdsStart) < 1500) {
+        checkRds();
+        const char *n = getStationName();
+        if (n && n[0] && n[0] != '*') { strlcpy(name, n, sizeof(name)); break; }
+        delay(100);
+      }
+    } else {
+      identifyFrequency(freq, false);
+      const char *n = getStationName();
+      if (n && n[0] && n[0] != '*') strlcpy(name, n, sizeof(name));
+    }
+
+    uint32_t fHz = (uint32_t)freq * 1000;
+    memories[slot].freq = fHz;
+    memories[slot].band = bandIdx;
+    memories[slot].mode = radioState.mode;
+    strlcpy(memories[slot].name, name, sizeof(memories[slot].name));
+    prefsSaveMemory(slot, true);
+
+    scanStatus.results[written].slot = slot + 1;
+    scanStatus.results[written].freq = freq;
+    scanStatus.results[written].rssi = scanStatus.currentRSSI;
+    strlcpy(scanStatus.results[written].name, name, 12);
+    written++;
+  }
+
+  scanStatus.resultCount = written;
+
+  updateFrequency(origFreq, false);
+  if (isSSB()) updateBFO(origBfo, false);
+  audioTempMute(false);
+  clearStationInfo();
+  identifyFrequency(getEffectiveFreq());
+}
+
+void scanAbort() {
+  scanStatus.running = SCAN_ABORTED;
+  seekStop = true;
+}
+
+bool scanIsRunning() {
+  return scanStatus.running == SCAN_RUNNING;
+}
+
+const ScanStatus* scanGetStatus() {
+  return &scanStatus;
 }

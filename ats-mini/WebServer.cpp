@@ -128,7 +128,16 @@ void webInit()
     json += String("\"sleep\":") + (sleepOn() ? "true" : "false") + ",";
     json += "\"wifi_mode\":\"" + wifiStatusStr + "\",";
     json += "\"wifi_rssi\":" + String(ws == 2 ? WiFi.RSSI() : 0) + ",";
-    json += "\"ip_address\":\"" + String(getWiFiIPAddress()) + "\"";
+    json += "\"ip_address\":\"" + String(getWiFiIPAddress()) + "\",";
+    json += "\"station_name\":\"" + String(getStationName()) + "\",";
+    json += "\"program_info\":\"" + String(getProgramInfo()) + "\",";
+    json += "\"rssi\":" + String(radioState.rssi) + ",";
+    json += "\"snr\":" + String(radioState.snr) + ",";
+    json += String("\"main_muted\":") + (audioIsMainMuted() ? "true" : "false") + ",";
+    json += String("\"squelched\":") + (audioIsSquelched() ? "true" : "false") + ",";
+    json += "\"squelch\":" + String(radioState.squelch[radioState.mode] & 0x7F) + ",";
+    json += String("\"squelch_is_snr\":") + ((radioState.squelch[radioState.mode] & 0x80) ? "true" : "false") + ",";
+    json += "\"theme_idx\":" + String(themeIdx);
     json += "}";
     request->send(200, "application/json", json);
   });
@@ -773,62 +782,36 @@ static const String webRadioPage()
 {
   String ip = "";
   String ssid = "";
-  String freq = radioState.mode == FM?
-    String(radioState.frequency / 100.0) + "MHz "
-  : String(radioState.frequency + radioState.bfo / 1000.0) + "kHz ";
+  String freq = radioState.mode == FM
+    ? String((float)radioState.frequency / 100.0, 1) + " MHz"
+    : String(radioState.frequency + radioState.bfo / 1000) + " kHz";
 
-  if(getWiFiStatus() == 2)
-  {
-    ip = WiFi.localIP().toString();
-    ssid = WiFi.SSID();
-  }
-  else
-  {
-    ip = WiFi.softAPIP().toString();
-    ssid = RECEIVER_NAME;
-  }
+  if(getWiFiStatus() == 2) { ip = WiFi.localIP().toString(); ssid = WiFi.SSID(); }
+  else { ip = WiFi.softAPIP().toString(); ssid = RECEIVER_NAME; }
+
+  uint8_t rssiPct = radioState.rssi > 100 ? 100 : radioState.rssi;
+  String stationName = getStationName();
+  String progInfo = getProgramInfo();
 
   return webPage(
 "<H1>ATS-Mini Pocket Receiver</H1>"
-"<TABLE COLUMNS=2>"
-"<TR>"
-  "<TD CLASS='LABEL'>IP Address</TD>"
-  "<TD><A HREF='http://" + ip + "'>" + ip + "</A> (" + ssid + ")</TD>"
-"</TR>"
-"<TR>"
-  "<TD CLASS='LABEL'>MAC Address</TD>"
-  "<TD>" + String(getMACAddress()) + "</TD>"
-"</TR>"
-"<TR>"
-  "<TD CLASS='LABEL'>Firmware</TD>"
-  "<TD>" + String(getVersion(true)) + "</TD>"
-"</TR>"
-"<TR>"
-  "<TD CLASS='LABEL'>Band</TD>"
-  "<TD>" + String(getCurrentBand()->bandName) + "</TD>"
-"</TR>"
-"<TR>"
-  "<TD CLASS='LABEL'>Frequency</TD>"
-  "<TD>" + freq + String(bandModeDesc[radioState.mode]) + "</TD>"
-"</TR>"
-"<TR>"
-  "<TD CLASS='LABEL'>Signal Strength</TD>"
-  "<TD>" + String(radioState.rssi) + "dBuV</TD>"
-"</TR>"
-"<TR>"
-  "<TD CLASS='LABEL'>Signal to Noise</TD>"
-  "<TD>" + String(radioState.snr) + "dB</TD>"
-"</TR>"
-"<TR>"
-  "<TD CLASS='LABEL'>Battery Voltage</TD>"
-  "<TD>" + String(batteryMonitor()) + "V</TD>"
-"</TR>"
+"<TABLE>"
+"<TR><TD CLASS='LABEL'>Band</TD><TD>" + String(getCurrentBand()->bandName) + "</TD></TR>"
+"<TR><TD CLASS='LABEL'>Frequency</TD><TD>" + freq + " " + String(bandModeDesc[radioState.mode]) + "</TD></TR>"
+"<TR><TD CLASS='LABEL'>Signal</TD><TD>"
+  "<DIV STYLE='background:var(--box-bg);border:1px solid var(--box-border);height:1.2em'>"
+  "<DIV STYLE='background:var(--s-meter);height:100%;width:" + String(rssiPct) + "&#37;'></DIV></DIV>"
+  + String(radioState.rssi) + " dBuV / " + String(radioState.snr) + " dB SNR</TD></TR>"
+"<TR><TD CLASS='LABEL'>Station</TD><TD>" + (stationName[0] ? stationName : "&mdash;") + "</TD></TR>"
+"<TR><TD CLASS='LABEL'>Info</TD><TD>" + (progInfo[0] ? progInfo : "&mdash;") + "</TD></TR>"
+"<TR><TD CLASS='LABEL'>Volume</TD><TD>" + String(radioState.vol) + "/63"
+  + (audioIsMuted() ? " (Muted)" : "")
+  + (audioIsSquelched() ? " (Squelched)" : "") + "</TD></TR>"
+"<TR><TD CLASS='LABEL'>Battery</TD><TD>" + String(batteryMonitor(), 2) + "V</TD></TR>"
+"<TR><TD CLASS='LABEL'>IP Address</TD><TD><A HREF='http://" + ip + "'>" + ip + "</A> (" + ssid + ")</TD></TR>"
+"<TR><TD CLASS='LABEL'>Firmware</TD><TD>" + String(getVersion(true)) + "</TD></TR>"
 "</TABLE>"
-"<DIV STYLE='text-align:center;margin-top:1em'>"
-"<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=prev'})\" STYLE='width:auto;padding:0.5em 1em'>Prev Band</BUTTON>&nbsp;"
-"<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=next'})\" STYLE='width:auto;padding:0.5em 1em'>Next Band</BUTTON>"
-"</DIV>"
-, 5);  // auto-refresh every 5 seconds
+, 5);
 }
 
 static const String webControlsPage()

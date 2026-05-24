@@ -34,7 +34,7 @@ String getWiFiScanHidden(void) {
 static void webSetConfig(AsyncWebServerRequest *request);
 static const String webInputField(const String &name, const String &value, bool pass = false);
 static const String webStyleSheet();
-static const String webPage(const String &body);
+static const String webPage(const String &body, int refreshSec = 0);
 static const String webUtcOffsetSelector();
 static const String webThemeSelector();
 static const String webRadioPage();
@@ -324,8 +324,11 @@ static const String webStyleSheet()
 ;
 }
 
-static const String webPage(const String &body)
+static const String webPage(const String &body, int refreshSec)
 {
+  String refresh = refreshSec > 0 ?
+    "<META HTTP-EQUIV='refresh' CONTENT='" + String(refreshSec) + "'>" : "";
+
   return
 "<!DOCTYPE HTML>"
 "<HTML>"
@@ -333,6 +336,7 @@ static const String webPage(const String &body)
   "<META CHARSET='UTF-8'>"
   "<META NAME='viewport' CONTENT='width=device-width, initial-scale=1.0'>"
   "<TITLE>ATS-Mini Config</TITLE>"
+  + refresh +
   "<STYLE>" + webStyleSheet() + "</STYLE>"
 "</HEAD>"
 "<BODY STYLE='font-family: sans-serif;'>" + body + "</BODY>"
@@ -437,7 +441,12 @@ static const String webRadioPage()
   "<TD>" + String(batteryMonitor()) + "V</TD>"
 "</TR>"
 "</TABLE>"
-);
+"<FORM ACTION='/api/command' METHOD='POST' STYLE='text-align:center;margin-top:1em'>"
+"<INPUT TYPE='hidden' NAME='cmd' VALUE='band'>"
+"<INPUT TYPE='submit' NAME='value' VALUE='prev' STYLE='width:auto;padding:0.5em 1em'>&nbsp;"
+"<INPUT TYPE='submit' NAME='value' VALUE='next' STYLE='width:auto;padding:0.5em 1em'>"
+"</FORM>"
+, 5);  // auto-refresh every 5 seconds
 }
 
 static const String webMemoryPage()

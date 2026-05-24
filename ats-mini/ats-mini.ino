@@ -32,6 +32,9 @@ RadioState radioState = {0};
 // CONSTANTS AND VARIABLES
 // =================================
 
+// Maximum encoder counts to accumulate (higher = fewer lost steps during busy periods)
+#define MAX_ENCODER_ACCUM  20
+
 volatile bool seekStop = false; // G8PTN: Added flag to abort seeking on rotary encoder detection
 
 long elapsedRSSI = millis();
@@ -257,14 +260,16 @@ ICACHE_RAM_ATTR void rotaryEncoder()
     int16_t accelDelta = accelerateEncoder(delta);
 
     // Do not accumulate too many encoder steps if event loop doesn't consume them
-    if(abs(encoderCount) < 5)
+    if(abs(encoderCount) < MAX_ENCODER_ACCUM)
     {
       encoderCount += delta;
       encoderCountAccel += accelDelta;
     }
 
-    // Reset the seek flag
-    seekStop = true;
+    // Only abort seek on significant encoder movement (>=3 steps) to prevent
+    // accidental abort from a single brush contact or vibration.
+    if(abs(encoderCount) >= 3)
+      seekStop = true;
   }
 }
 

@@ -1,6 +1,6 @@
 ARDUINO_CLI := arduino-cli
 
-PROFILE	= esp32s3-ospi
+PROFILE	= esp32s3-qspi
 FQBN	= esp32.esp32.esp32s3
 INO	= ats-mini.ino
 ELF	= ./build/$(FQBN)/$(INO).elf

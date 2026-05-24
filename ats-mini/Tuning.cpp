@@ -15,6 +15,16 @@
 // External variables defined in ats-mini.ino
 extern ButtonTracker pb1;
 
+// RSSI/SNR display update throttling counter
+static uint32_t rssiUpdateCounter = 0;
+
+// Force the RSSI/SNR display to refresh on the next poll cycle.
+// Call after frequency or band changes so the display doesn't show stale values.
+void resetRssiSnrDisplay()
+{
+  rssiUpdateCounter = 31;  // next (++ & 7) == 0 → immediate update
+}
+
 ICACHE_RAM_ATTR int16_t accelerateEncoder(int8_t dir)
 {
   const uint32_t speedThresholds[] = {350, 60, 45, 35, 25}; // ms between clicks
@@ -215,6 +225,10 @@ bool updateFrequency(int newFreq, bool wrap)
 
   // Save current band frequency
   band->currentFreq = radioState.frequency + radioState.bfo / 1000;
+
+  // Accelerate RSSI/SNR display update so the viewer sees the new signal
+  // within 200ms instead of waiting up to 1.6s for the throttled counter.
+  resetRssiSnrDisplay();
   return true;
 }
 
@@ -254,8 +268,9 @@ void showFrequencySeek(uint16_t freq)
 //
 bool doSeek(int16_t enc, int16_t enca)
 {
-  // disable amp to avoid sound artifacts
-  audioTempMute(true);
+  // SSB seek is BFO-only (no frequency change), so no audio pop — skip mute.
+  if(!isSSB()) audioTempMute(true);
+
   if(seekMode() == SEEK_DEFAULT)
   {
     if(isSSB())
@@ -293,8 +308,8 @@ bool doSeek(int16_t enc, int16_t enca)
   // Check for named frequencies
   identifyFrequency(radioState.frequency + radioState.bfo / 1000);
   // Will need a redraw
-  // enable amp
-  audioTempMute(false);
+  // enable amp (SSB seek skipped the mute, so skip unmute too)
+  if(!isSSB()) audioTempMute(false);
   return(true);
 }
 
@@ -397,7 +412,6 @@ bool clickFreq(bool shortPress)
 
 bool processRssiSnr()
 {
-  static uint32_t updateCounter = 0;
   bool needRedraw = false;
 
   rx.getCurrentReceivedSignalQuality();
@@ -424,7 +438,7 @@ bool processRssiSnr()
   }
 
   // G8PTN: Based on 1.2s interval, update RSSI & SNR
-  if(!(updateCounter++ & 7))
+  if(!(rssiUpdateCounter++ & 7))
   {
     // Show RSSI status only if this condition has changed
     if(newRSSI != radioState.rssi)

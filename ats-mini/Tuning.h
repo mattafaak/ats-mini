@@ -33,4 +33,7 @@ bool consumeAbortPending();
 // RSSI/SNR polling and squelch processing
 bool processRssiSnr();
 
+// Force RSSI/SNR display to update on next poll (called on frequency change)
+void resetRssiSnrDisplay();
+
 #endif

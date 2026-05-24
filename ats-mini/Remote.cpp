@@ -68,6 +68,7 @@ char remoteReadChar(Stream* stream)
   uint32_t start = millis();
   while (!stream->available()) {
     if ((millis() - start) > 5000) return 0;  // 5 second timeout
+    delay(1);
   }
   key = stream->read();
   stream->print(key);
@@ -86,7 +87,7 @@ long int remoteReadInteger(Stream* stream)
       continue;
     } else if ((ch >= '0') && (ch <= '9')) {
       ch = remoteReadChar(stream);
-      // Can overflow, but it's ok
+      if (!ch) return result;  // timeout, return partial result
       result = result * 10 + (ch - '0');
     } else {
       return result;
@@ -97,15 +98,19 @@ long int remoteReadInteger(Stream* stream)
 void remoteReadString(Stream* stream, char *bufStr, uint8_t bufLen)
 {
   uint8_t length = 0;
+  uint32_t start = millis();
   while (true) {
+    if ((millis() - start) > 5000) { bufStr[length] = '\0'; return; }
     char ch = stream->peek();
     if (ch == 0xFF) {
+      delay(1);
       continue;
     } else if (ch == ',' || ch < ' ') {
       bufStr[length] = '\0';
       return;
     } else {
       ch = remoteReadChar(stream);
+      if (!ch) { bufStr[length] = '\0'; return; }
       bufStr[length] = ch;
       if (++length >= bufLen - 1) {
         bufStr[length] = '\0';
@@ -118,7 +123,11 @@ void remoteReadString(Stream* stream, char *bufStr, uint8_t bufLen)
 static bool expectNewline(Stream* stream)
 {
   char ch;
-  while ((ch = stream->peek()) == 0xFF);
+  uint32_t start = millis();
+  while ((ch = stream->peek()) == 0xFF) {
+    if ((millis() - start) > 5000) return false;
+    delay(1);
+  }
   if (ch == '\r') {
     stream->read();
     return true;
@@ -268,10 +277,15 @@ static void remoteSetColorTheme(Stream* stream)
       break;
     }
 
-    p[i + 1]  = char2nibble(remoteReadChar(stream)) * 16;
-    p[i + 1] |= char2nibble(remoteReadChar(stream));
-    p[i]      = char2nibble(remoteReadChar(stream)) * 16;
-    p[i]     |= char2nibble(remoteReadChar(stream));
+    char nh;
+    if(!(nh = remoteReadChar(stream))) { stream->println(" Err"); break; }
+    p[i + 1]  = char2nibble(nh) * 16;
+    if(!(nh = remoteReadChar(stream))) { stream->println(" Err"); break; }
+    p[i + 1] |= char2nibble(nh);
+    if(!(nh = remoteReadChar(stream))) { stream->println(" Err"); break; }
+    p[i]      = char2nibble(nh) * 16;
+    if(!(nh = remoteReadChar(stream))) { stream->println(" Err"); break; }
+    p[i]     |= char2nibble(nh);
   }
 
   // Redraw screen
@@ -369,7 +383,13 @@ static void scanToSerial(Stream* stream)
     if (isSSB()) updateBFO(0, true);
     if (updateFrequency(freq, false))
     {
-      delay(80);
+      // Adaptive settle: poll RSSI until signal detected or 80ms max
+      uint32_t settle = millis();
+      while ((millis() - settle) < 80) {
+        rx.getCurrentReceivedSignalQuality();
+        if (rx.getCurrentRSSI() > 0) break;
+        delay(5);
+      }
       rx.getCurrentReceivedSignalQuality();
       uint8_t rssi = rx.getCurrentRSSI();
       uint8_t snr = rx.getCurrentSNR();

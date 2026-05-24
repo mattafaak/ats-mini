@@ -48,7 +48,17 @@ bool runScheduler(uint32_t currentTime)
   if(needRedraw) background_timer = currentTime;
   if((currentTime - background_timer) > BACKGROUND_REFRESH_TIME)
   {
-    if(radioState.cmd == CMD_NONE) needRedraw = true;
+    if(radioState.cmd == CMD_NONE)
+    {
+      // Only force redraw when the clock minute has changed, so the time
+      // display stays current without wasting CPU cycles on idle frames.
+      static uint8_t lastBgMinute = 0;
+      uint8_t h, m;
+      if(clockGetHM(&h, &m) && m != lastBgMinute) {
+        lastBgMinute = m;
+        needRedraw = true;
+      }
+    }
     background_timer = currentTime;
   }
 

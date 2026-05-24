@@ -1,10 +1,11 @@
+#include "BleBase.h"
 #include "BlePeripheral.h"
 
 void BlePeripheral::begin(const char* deviceName)
 {
   if (started) return;
 
-  BLEDevice::init(deviceName);
+  BleBase::init(deviceName);
   BLEDevice::setPower(ESP_PWR_LVL_N0);
   configureDefaults();
   configureSecurity();

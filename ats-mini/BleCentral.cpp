@@ -1,3 +1,4 @@
+#include "BleBase.h"
 #include "BleCentral.h"
 
 BleCentral* BleCentral::activeScanner = nullptr;
@@ -12,7 +13,7 @@ void BleCentral::begin(const char* deviceName)
 {
   if (state_ != State::Idle) return;
 
-  BLEDevice::init(deviceName);
+  BleBase::init(deviceName);
   configureSecurity();
   clearPeer();
   scanAttempts = 0;

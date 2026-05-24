@@ -28,7 +28,7 @@ OPTIONS = \
 HEADERS = \
 	Common.h MenuData.h RadioDriver.h WebServer.h Scheduler.h Themes.h Menu.h Storage.h \
 	tft_setup.h Rotary.h Utils.h Button.h EIBI.h Remote.h BleMode.h \
-	BlePeripheral.h BleUartPeripheral.h BleCentral.h BleHidCentral.h \
+	BlePeripheral.h BleUartPeripheral.h BleCentral.h BleHidCentral.h BleBase.h \
 	SI4735-fixed.h patch_init.h AudioManager.h DisplayController.h
 
 SRC = \

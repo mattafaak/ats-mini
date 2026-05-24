@@ -10,6 +10,7 @@
 #include <BLERemoteCharacteristic.h>
 #undef private
 
+#include "BleBase.h"
 #include "BleHidCentral.h"
 #include "Draw.h"
 #include <string.h>
@@ -196,8 +197,7 @@ BleHidState BleHidCentral::update()
 
 bool BleHidCentral::consumeAbortPending()
 {
-  bool pending = abortPending;
-  abortPending = false;
+  bool pending = BleBase::consumeAbortFlag(abortPending);
   if (pending)
   {
     pendingState = {};

@@ -1,11 +1,11 @@
+#include "BleBase.h"
 #include "BleUartPeripheral.h"
 #include <host/ble_hs.h>
 #include "Remote.h"
 
 bool BleUartPeripheral::consumeAbortPending()
 {
-  bool pending = abortPending;
-  abortPending = false;
+  bool pending = BleBase::consumeAbortFlag(abortPending);
   if (pending)
     rxBuf.flush();
   return pending;

@@ -344,9 +344,15 @@ uint8_t getFreqInputPos()
 
 int getFreqInputStep()
 {
-  return freqInputPos % 2 ?
-    5 * pow(10, (freqInputPos - (radioState.mode == AM ? 6 : 0) - 1) / 2) :
-            pow(10, (freqInputPos - (radioState.mode == AM ? 6 : 0)) / 2);
+  // Powers of 10 for integer step computation
+  // Index 0..4 -> 1, 10, 100, 1000, 10000
+  static const int tenPow[] = {1, 10, 100, 1000, 10000};
+
+  if(freqInputPos % 2) {
+    return 5 * tenPow[(freqInputPos - (radioState.mode == AM ? 6 : 0) - 1) / 2];
+  } else {
+    return tenPow[(freqInputPos - (radioState.mode == AM ? 6 : 0)) / 2];
+  }
 }
 
 static uint8_t getMinFreqInputPos()

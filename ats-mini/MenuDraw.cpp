@@ -97,6 +97,11 @@ static void drawMode(int x, int y, int sx)
       spr.setTextColor(TH.menu_item);
     }
 
+    // Prevent repeats for short menus
+    if (count < 5 && ((radioState.mode+i) < 0 || (radioState.mode+i) >= count)) {
+      continue;
+    }
+
     spr.setTextDatum(MC_DATUM);
     if((radioState.mode!=FM) || (i==0))
      spr.drawString(bandModeDesc[abs((radioState.mode+count+i)%count)], 40+x+(sx/2), 64+y+(i*16), 2);
@@ -212,6 +217,11 @@ static void drawSleepMode(int x, int y, int sx)
       spr.setTextColor(TH.menu_hl_text, TH.menu_hl_bg);
     } else {
       spr.setTextColor(TH.menu_item);
+    }
+
+    // Prevent repeats for short menus
+    if (count < 5 && ((radioState.sleepMode+i) < 0 || (radioState.sleepMode+i) >= count)) {
+      continue;
     }
 
     spr.setTextDatum(MC_DATUM);

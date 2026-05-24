@@ -76,7 +76,12 @@ void webInit()
   });
 
   // This method saves configuration form contents
-  server.on("/setconfig", HTTP_ANY, webSetConfig);
+  server.on("/setconfig", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+    if(loginUsername != "" && loginPassword != "")
+      if(!request->authenticate(loginUsername.c_str(), loginPassword.c_str()))
+        return request->requestAuthentication();
+    webSetConfig(request);
+  });
 
   // JSON status API
   server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -112,6 +117,9 @@ void webInit()
 
   // Remote control API
   server.on("/api/command", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if(loginUsername != "" && loginPassword != "")
+      if(!request->authenticate(loginUsername.c_str(), loginPassword.c_str()))
+        return request->requestAuthentication();
     String cmd = request->arg("cmd");
     String value = request->arg("value");
 
@@ -227,7 +235,7 @@ void webSetConfig(AsyncWebServerRequest *request)
   if(request->hasParam("utcoffset", true))
   {
     String utcOffset = request->getParam("utcoffset", true)->value();
-    radioState.utcOffset = utcOffset.toInt();
+    radioState.utcOffset = constrain(utcOffset.toInt(), -12, 14);
     clockRefreshTime();
     prefsSave |= SAVE_SETTINGS;
   }
@@ -236,7 +244,7 @@ void webSetConfig(AsyncWebServerRequest *request)
   if(request->hasParam("theme", true))
   {
     String theme = request->getParam("theme", true)->value();
-    themeIdx = theme.toInt();
+    themeIdx = constrain(theme.toInt(), 0, getTotalThemes() - 1);
     prefsSave |= SAVE_SETTINGS;
   }
 
@@ -452,6 +460,7 @@ static const String webRadioPage()
 static const String webMemoryPage()
 {
   String items = "";
+  items.reserve(8192);
 
   for(int j=0 ; j<MEMORY_COUNT ; j++)
   {

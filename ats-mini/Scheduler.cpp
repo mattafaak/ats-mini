@@ -7,10 +7,10 @@
 #include "Storage.h"
 #include "Scheduler.h"
 
-extern long elapsedRSSI;
-extern long lastRDSCheck;
-extern long lastScheduleCheck;
-extern long lastNTPCheck;
+extern uint32_t elapsedRSSI;
+extern uint32_t lastRDSCheck;
+extern uint32_t lastScheduleCheck;
+extern uint32_t lastNTPCheck;
 extern uint32_t background_timer;
 
 bool runScheduler(uint32_t currentTime)

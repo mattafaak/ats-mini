@@ -242,6 +242,6 @@ bool ntpSyncTime();
 #define REMOTE_PREFS     4
 #define REMOTE_SHORT_PRESS 8
 #define REMOTE_PRESSED   16
-#define REMOTE_DIRECTION 8
+#define REMOTE_DIRECTION_SHIFT 8
 
 #endif // COMMON_H

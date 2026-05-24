@@ -9,6 +9,7 @@
 #include "Menu.h"
 #include "Draw.h"
 #include "DisplayController.h"
+#include "BleMode.h"
 
 // SSB patch for whole SSBRX initialization string
 #include "patch_init.h"
@@ -106,8 +107,9 @@ bool sleepOn(int x)
 
     if(radioState.sleepMode == SLEEP_LIGHT)
     {
-      // Disable WiFi
+      // Disable WiFi and BLE
       netStop();
+      if(radioState.bleMode) bleStop();
 
       // Unmute squelch
       if(audioIsSquelched() && !audioIsMainMuted()) audioMuteForce(false);
@@ -145,6 +147,7 @@ bool sleepOn(int x)
       sleepOn(false);
       // Enable WiFi
       netInit(radioState.wifiMode, false);
+      if(radioState.bleMode) bleInit(radioState.bleMode);
     }
   }
   else if((x==0) && sleep_on)
@@ -213,9 +216,20 @@ void clockRefreshTime()
 bool clockSet(uint8_t hours, uint8_t minutes, uint8_t seconds)
 {
   // Verify input before setting clock
-  if(!clockHasBeenSet && hours < 24 && minutes < 60 && seconds < 60)
+  if(hours < 24 && minutes < 60 && seconds < 60)
   {
-    clockHasBeenSet = true;
+    // On first set, always accept. On subsequent sets, only accept
+    // if the new time differs by more than 10 seconds (to correct drift
+    // without jittering on every NTP poll).
+    if(!clockHasBeenSet) {
+      clockHasBeenSet = true;
+    } else {
+      int currentTotal = clockHours * 3600 + clockMinutes * 60 + clockSeconds;
+      int newTotal = hours * 3600 + minutes * 60 + seconds;
+      int delta = abs(newTotal - currentTotal);
+      if(delta <= 10) return false;  // Skip small changes
+    }
+
     clockTimer   = micros();
     clockHours   = hours;
     clockMinutes = minutes;

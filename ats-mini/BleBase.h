@@ -5,13 +5,19 @@
 
 namespace BleBase {
 
+static bool initialized = false;
+
 inline void init(const char* deviceName)
 {
-    static bool initialized = false;
     if (!initialized) {
         initialized = true;
         BLEDevice::init(deviceName);
     }
+}
+
+inline void reset()
+{
+    initialized = false;
 }
 
 // Atomic-style read-and-clear for volatile abort flags.

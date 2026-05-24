@@ -16,7 +16,7 @@ WiFiMulti wifiMulti;
 // Access Point (AP) mode settings
 //
 static const char *apSSID    = RECEIVER_NAME;
-static const char *apPWD     = 0;       // No password
+static const char *apPWD     = "atsmini";
 static const int   apChannel = 10;      // WiFi channel number (1..13)
 static const bool  apHideMe  = false;   // TRUE: disable SSID broadcast
 static const int   apClients = 3;       // Maximum simultaneous connected clients
@@ -46,6 +46,15 @@ void netTickTime()
     connectTime = millis();
     itIsTimeToWiFi = false;
   }
+
+  // Reconnection watchdog: if WiFi was previously connected but
+  // is now disconnected, trigger a reconnection attempt.
+  static bool wasConnected = false;
+  int8_t status = getWiFiStatus();
+  if(wasConnected && status == -1) {
+    netRequestConnect();
+  }
+  wasConnected = (status >= 1);
 }
 
 //

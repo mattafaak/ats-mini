@@ -219,11 +219,11 @@ void drawFrequency(uint32_t freq, int x, int y, int ux, int uy, uint8_t hl)
     {
       // SSB frequency
       char text[32];
-      freq = freq * 1000 + radioState.bfo;
-      sprintf(text, "%3.3lu", freq / 1000);
+      int32_t displayFreq = (int32_t)freq * 1000 + radioState.bfo;
+      sprintf(text, "%3.3lu", labs(displayFreq) / 1000);
       spr.drawString(text, x, y, 7);
       spr.setTextDatum(ML_DATUM);
-      sprintf(text, ".%3.3lu", freq % 1000);
+      sprintf(text, ".%3.3lu", (uint32_t)labs(displayFreq) % 1000);
       spr.drawString(text, 4+x, 17+y, 4);
     }
     else

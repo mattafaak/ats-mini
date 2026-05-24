@@ -422,11 +422,11 @@ int remoteDoCommand(Stream* stream, RemoteState* state, char key)
   switch(key)
   {
     case 'R': // Rotate Encoder Clockwise
-      event |= 1 << REMOTE_DIRECTION;
+      event |= 1 << REMOTE_DIRECTION_SHIFT;
       event |= REMOTE_PREFS;
       break;
     case 'r': // Rotate Encoder Counterclockwise
-      event |= -1 << REMOTE_DIRECTION;
+      event |= -1 << REMOTE_DIRECTION_SHIFT;
       event |= REMOTE_PREFS;
       break;
     case 'e': // Encoder Push Button

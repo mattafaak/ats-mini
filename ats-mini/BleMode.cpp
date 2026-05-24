@@ -2,6 +2,7 @@
 #include "Themes.h"
 #include "Remote.h"
 #include "Draw.h"
+#include "BleBase.h"
 #include "BleHidCentral.h"
 #include "BleMode.h"
 
@@ -29,6 +30,7 @@ int8_t getBleStatus()
 //
 void bleStop()
 {
+  BleBase::reset();
   if (BLESerial.isStarted())
     BLESerial.end();
 
@@ -83,7 +85,7 @@ int bleLoop(uint8_t bleMode)
   event |= REMOTE_CHANGED;
   if (input.rotation)
   {
-    event |= input.rotation << REMOTE_DIRECTION;
+    event |= input.rotation << REMOTE_DIRECTION_SHIFT;
     event |= REMOTE_PREFS;
   }
   if (input.wasClicked)

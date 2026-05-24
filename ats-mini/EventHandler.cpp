@@ -15,8 +15,8 @@
 extern volatile int16_t encoderCount;
 extern volatile int16_t encoderCountAccel;
 extern ButtonTracker pb1;
-extern long elapsedSleep;
-extern long elapsedCommand;
+extern uint32_t elapsedSleep;
+extern uint32_t elapsedCommand;
 
 uint32_t consumeEncoderCounts()
 {
@@ -47,7 +47,7 @@ bool handleEncoderInput(void)
   pb1st.isPressed |= !!(ser_event & REMOTE_PRESSED);
   pb1st.wasClicked |= !!(ser_event & REMOTE_CLICK);
   pb1st.wasShortPressed |= !!(ser_event & REMOTE_SHORT_PRESS);
-  int ser_direction = ser_event >> REMOTE_DIRECTION;
+  int ser_direction = ser_event >> REMOTE_DIRECTION_SHIFT;
   encCount = ser_direction? ser_direction : encCount;
   encCountAccel = ser_direction? ser_direction : encCountAccel;
   if(ser_event & REMOTE_PREFS) prefsRequestSave(SAVE_ALL);
@@ -58,7 +58,7 @@ bool handleEncoderInput(void)
   pb1st.isPressed |= !!(ble_event & REMOTE_PRESSED);
   pb1st.wasClicked |= !!(ble_event & REMOTE_CLICK);
   pb1st.wasShortPressed |= !!(ble_event & REMOTE_SHORT_PRESS);
-  int ble_direction = ble_event >> REMOTE_DIRECTION;
+  int ble_direction = ble_event >> REMOTE_DIRECTION_SHIFT;
   encCount = ble_direction? ble_direction : encCount;
   encCountAccel = ble_direction? ble_direction : encCountAccel;
   if(ble_event & REMOTE_PREFS) prefsRequestSave(SAVE_ALL);
@@ -138,7 +138,7 @@ bool handleEncoderInput(void)
           // Side bar menus / settings
           needRedraw |= doSideBar(radioState.cmd, encCount, encCountAccel);
           // Current settings, etc. may have changed
-          prefsRequestSave(SAVE_ALL);
+          prefsRequestSave(SAVE_SETTINGS);
           break;
       }
 

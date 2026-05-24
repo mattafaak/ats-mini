@@ -12,7 +12,7 @@
 Preferences prefs;
 
 static uint32_t itIsTimeToSave = 0;       // Preferences to save, or 0 for none
-static bool savingPrefsFlag    = false;   // TRUE: Saving preferences
+static volatile bool savingPrefsFlag    = false;   // TRUE: Saving preferences
 static uint32_t storeTime      = millis();
 
 // To store any change to preferences, we need at least STORE_TIME

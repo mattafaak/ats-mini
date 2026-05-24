@@ -37,19 +37,17 @@ RadioState radioState = {0};
 
 volatile bool seekStop = false; // G8PTN: Added flag to abort seeking on rotary encoder detection
 
-long elapsedRSSI = millis();
-long elapsedButton = millis();
+uint32_t elapsedRSSI = millis();
 
-long lastStrengthCheck = millis();
-long lastRDSCheck = millis();
-long lastNTPCheck = millis();
-long lastScheduleCheck = millis();
+uint32_t lastRDSCheck = millis();
+uint32_t lastNTPCheck = millis();
+uint32_t lastScheduleCheck = millis();
 
-long elapsedCommand = millis();
+uint32_t elapsedCommand = millis();
 volatile int16_t encoderCount = 0;
 volatile int16_t encoderCountAccel = 0;
 
-long elapsedSleep = millis();           // Display sleep timer
+uint32_t elapsedSleep = millis();           // Display sleep timer
 
 
 // Background screen refresh

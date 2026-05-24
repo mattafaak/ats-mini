@@ -65,7 +65,9 @@ void audioMuteForce(bool on)
     applyMute(true);
   } else {
     effectiveMuted = false;
-    applyMute(false);
+    if(!mainMuted && !squelchMuted) {
+      applyMute(false);
+    }
   }
 }
 
@@ -120,8 +122,8 @@ void audioTempMute(bool on)
       applyMute(true);
     }
   } else {
-    effectiveMuted = false;
     if(!mainMuted && !squelchMuted) {
+      effectiveMuted = false;
       applyMute(false);
     }
   }

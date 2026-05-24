@@ -111,10 +111,10 @@ static bool showStationName(const char *stationName, bool isLong = false)
     if(isLong)
     {
       bufStationName[0] = 0xFF;
-      strcpy(bufStationName + 1, stationName);
+      strlcpy(bufStationName + 1, stationName, sizeof(bufStationName) - 1);
     }
     else
-      strcpy(bufStationName, stationName);
+      strlcpy(bufStationName, stationName, sizeof(bufStationName));
     return(true);
   }
 
@@ -169,7 +169,7 @@ static bool showProgramInfo(const char *programInfo)
 {
   if(programInfo && strcmp(bufProgramInfo, programInfo))
   {
-    strcpy(bufProgramInfo, programInfo);
+    strlcpy(bufProgramInfo, programInfo, sizeof(bufProgramInfo));
     return(true);
   }
 

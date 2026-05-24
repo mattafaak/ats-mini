@@ -536,6 +536,83 @@ static const String webRadioPage()
 , 5);  // auto-refresh every 5 seconds
 }
 
+static const String webControlsPage()
+{
+  return webPage(
+"<H1>Controls</H1>"
+"<TABLE>"
+
+// Tuning section
+"<TR><TH CLASS='HEADING'>Tuning</TH></TR>"
+"<TR><TD>"
+  "Freq: <INPUT TYPE='text' ID='f' SIZE='10'> "
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=tune&value='+document.getElementById('f').value})\">Go</BUTTON>"
+  "<BR>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=seek&value=down'})\">&lt;&lt; Seek</BUTTON> "
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=seek&value=up'})\">Seek &gt;&gt;</BUTTON>"
+  "<BR>Step: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=step&value='+this.value})\">"
+    "<OPTION VALUE='0'>Auto</OPTION><OPTION VALUE='1'>1</OPTION><OPTION VALUE='2'>5</OPTION>"
+    "<OPTION VALUE='3'>9</OPTION><OPTION VALUE='4'>10</OPTION><OPTION VALUE='5'>100</OPTION>"
+  "</SELECT>"
+"</TD></TR>"
+
+// Audio section
+"<TR><TH CLASS='HEADING'>Audio</TH></TR>"
+"<TR><TD>"
+  "Vol: <INPUT TYPE='range' MIN='0' MAX='63' VALUE='" + String(radioState.vol) + "' CLASS='SLIDER' "
+  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=volume&value='+this.value})\"> "
+  "<SPAN>" + String(radioState.vol) + "</SPAN>"
+  "<BR>"
+  "<BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=mute&value='+(b.textContent=='Mute'));b.textContent=b.textContent=='Mute'?'Unmute':'Mute'\">Mute</BUTTON>"
+  "<BR>Squelch: <INPUT TYPE='range' MIN='0' MAX='127' VALUE='0' CLASS='SLIDER' "
+  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=squelch&value='+this.value})\">"
+  "<BR><BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=rssi'})\">RSSI</BUTTON> "
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=snr'})\">SNR</BUTTON>"
+"</TD></TR>"
+
+// Band/Mode section
+"<TR><TH CLASS='HEADING'>Band / Mode</TH></TR>"
+"<TR><TD>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=prev'})\">Prev</BUTTON> "
+  "<SPAN>" + String(getCurrentBand()->bandName) + "</SPAN> "
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=next'})\">Next</BUTTON>"
+  "<BR>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=0'})\">FM</BUTTON>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=1'})\">AM</BUTTON>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=2'})\">LSB</BUTTON>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=3'})\">USB</BUTTON>"
+  "<BR>BW: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=bandwidth&value='+this.value})\">"
+    "<OPTION>Auto</OPTION><OPTION>1.0k</OPTION><OPTION>2.0k</OPTION>"
+    "<OPTION>2.5k</OPTION><OPTION>3.0k</OPTION><OPTION>4.0k</OPTION><OPTION>6.0k</OPTION>"
+  "</SELECT>"
+"</TD></TR>"
+
+// Settings section
+"<TR><TH CLASS='HEADING'>Settings</TH></TR>"
+"<TR><TD>"
+  "AGC: <INPUT TYPE='range' MIN='0' MAX='37' VALUE='" + String(radioState.agcIndex) + "' CLASS='SLIDER' "
+  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=agc&value='+this.value})\">"
+  "<BR>AVC: <INPUT TYPE='range' MIN='0' MAX='90' VALUE='0' CLASS='SLIDER' "
+  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=avc&value='+this.value})\">"
+  "<BR>Cal: <BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=cal&value=-1'})\">-</BUTTON> "
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=cal&value=1'})\">+</BUTTON>"
+  "<BR>Brightness: <INPUT TYPE='range' MIN='10' MAX='255' VALUE='" + String(radioState.brightness) + "' CLASS='SLIDER' "
+  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=brightness&value='+this.value})\">"
+  "<BR><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=sleep&value='+(b.textContent=='Sleep'));b.textContent=b.textContent=='Sleep'?'Wake':'Sleep'\">Sleep</BUTTON>"
+  "<BR>FM Region: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=fm_region&value='+this.value})\">"
+    "<OPTION VALUE='0'>USA</OPTION><OPTION VALUE='1'>Europe</OPTION><OPTION VALUE='2'>Japan</OPTION>"
+  "</SELECT>"
+  "<BR>RDS: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=rds&value='+this.value})\">"
+    "<OPTION VALUE='0'>Off</OPTION><OPTION VALUE='1'>PS</OPTION><OPTION VALUE='7'>PS+PI+CT</OPTION>"
+  "</SELECT>"
+  "<BR><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=zoom&value='+(b.textContent=='Zoom'));b.textContent=b.textContent=='Zoom'?'Normal':'Zoom'\">Zoom</BUTTON>"
+  "<BR><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=scroll&value='+(b.textContent=='Normal'?'reverse':'normal')});b.textContent=b.textContent=='Normal'?'Reverse':'Normal'\">Normal</BUTTON>"
+"</TD></TR>"
+
+"</TABLE>"
+, 5);
+}
+
 static const String webMemoryPage()
 {
   String items = "";

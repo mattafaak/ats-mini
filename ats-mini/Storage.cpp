@@ -70,7 +70,7 @@ struct SavedBand
 
 void prefsSaveBand(uint8_t idx, bool openPrefs)
 {
-  SavedBand value;
+  SavedBand value = {};
   char name[32];
 
   // Will be saving to bands

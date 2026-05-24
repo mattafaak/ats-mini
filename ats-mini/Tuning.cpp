@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "Common.h"
 #include "Rotary.h"
 #include "Button.h"
@@ -8,19 +9,20 @@
 #include "EIBI.h"
 #include "Remote.h"
 #include "BleMode.h"
+#include "Station.h"
 #include "Tuning.h"
 
 // External variables defined in ats-mini.ino
 extern ButtonTracker pb1;
 
-int16_t accelerateEncoder(int8_t dir)
+ICACHE_RAM_ATTR int16_t accelerateEncoder(int8_t dir)
 {
   const uint32_t speedThresholds[] = {350, 60, 45, 35, 25}; // ms between clicks
   const uint16_t accelFactors[] =      {1,  2,  4,  8, 16}; // corresponding multipliers
-  static uint32_t lastEncoderTime = 0;
-  static uint32_t lastSpeed = speedThresholds[0];
-  static uint16_t lastAccelFactor = accelFactors[0];
-  static int8_t lastEncoderDir = 0;
+  static volatile uint32_t lastEncoderTime = 0;
+  static volatile uint32_t lastSpeed = speedThresholds[0];
+  static volatile uint16_t lastAccelFactor = accelFactors[0];
+  static volatile int8_t lastEncoderDir = 0;
 
   uint32_t currentTime = millis();
   lastSpeed = ((currentTime - lastEncoderTime) * 7 + lastSpeed * 3) / 10;
@@ -57,9 +59,7 @@ void useBand(const Band *band)
 
   if(band->bandMode==FM)
   {
-    // rx.setMaxDelaySetFrequency(60);
     rx.setFM(band->minimumFreq, band->maximumFreq, band->currentFreq, getCurrentStep()->step);
-    // rx.setTuneFrequencyAntennaCapacitor(0);
     rx.setSeekFmLimits(band->minimumFreq, band->maximumFreq);
 
     // More sensitive seek thresholds
@@ -75,7 +75,6 @@ void useBand(const Band *band)
   }
   else
   {
-    // rx.setMaxDelaySetFrequency(80);
     if(band->bandMode==AM)
     {
       rx.setAM(band->minimumFreq, band->maximumFreq, band->currentFreq, getCurrentStep()->step);
@@ -91,7 +90,6 @@ void useBand(const Band *band)
       // G8PTN: Always enabled
       rx.setSSBAutomaticVolumeControl(1);
       // G8PTN: Commented out
-      //rx.setSsbSoftMuteMaxAttenuation(radioState.softMuteMaxAtt);
       // To move frequency forward, need to move the BFO backwards
       if (radioState.mode == USB)
         rx.setSSBBfo(-(radioState.bfo + band->usbCal));
@@ -101,8 +99,6 @@ void useBand(const Band *band)
         rx.setSSBBfo(-radioState.bfo);  // No calibration if not USB/LSB
     }
 
-    // Set the tuning capacitor for SW or MW/LW
-    // rx.setTuneFrequencyAntennaCapacitor((band->bandType == MW_BAND_TYPE || band->bandType == LW_BAND_TYPE) ? 0 : 1);
 
     // G8PTN: Enable GPIO1 as output
     rx.setGpioCtl(1, 0, 0);

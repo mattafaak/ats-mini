@@ -1,4 +1,6 @@
+#include "Battery.h"
 #include "Common.h"
+#include "Station.h"
 #include "Themes.h"
 #include "Utils.h"
 #include "Menu.h"
@@ -62,8 +64,10 @@ static void remoteCaptureScreen(Stream* stream)
 char remoteReadChar(Stream* stream)
 {
   char key;
-
-  while (!stream->available());
+  uint32_t start = millis();
+  while (!stream->available()) {
+    if ((millis() - start) > 5000) return 0;  // 5 second timeout
+  }
   key = stream->read();
   stream->print(key);
   return key;
@@ -72,9 +76,12 @@ char remoteReadChar(Stream* stream)
 long int remoteReadInteger(Stream* stream)
 {
   long int result = 0;
+  uint32_t start = millis();
   while (true) {
+    if ((millis() - start) > 5000) return 0;  // total timeout
     char ch = stream->peek();
     if (ch == 0xFF) {
+      delay(1);
       continue;
     } else if ((ch >= '0') && (ch <= '9')) {
       ch = remoteReadChar(stream);

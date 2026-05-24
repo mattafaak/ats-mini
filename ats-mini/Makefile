@@ -26,10 +26,11 @@ OPTIONS = \
 	--warnings all
 
 HEADERS = \
-	Common.h MenuData.h RadioDriver.h WebServer.h Scheduler.h Themes.h Menu.h Storage.h \
-	tft_setup.h Rotary.h Utils.h Button.h EIBI.h Remote.h BleMode.h \
-	BlePeripheral.h BleUartPeripheral.h BleCentral.h BleHidCentral.h BleBase.h \
-	SI4735-fixed.h patch_init.h AudioManager.h DisplayController.h
+	About.h Battery.h Common.h MenuData.h RadioDriver.h Scan.h Scheduler.h Station.h \
+	Themes.h Menu.h Storage.h tft_setup.h Rotary.h Utils.h Button.h EIBI.h Remote.h \
+	BleMode.h BlePeripheral.h BleUartPeripheral.h BleCentral.h BleHidCentral.h BleBase.h \
+	SI4735-fixed.h patch_init.h AudioManager.h DisplayController.h Tuning.h \
+	WebServer.h
 
 SRC = \
 	$(INO) EventHandler.cpp Scheduler.cpp Utils.cpp Rotary.cpp Button.cpp Draw.cpp MenuDraw.cpp Menu.cpp \

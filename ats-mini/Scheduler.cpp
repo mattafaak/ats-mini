@@ -1,4 +1,7 @@
 #include "Common.h"
+#include "WiFiManager.h"
+#include "Station.h"
+#include "Tuning.h"
 #include "Utils.h"
 #include "Menu.h"
 #include "Storage.h"

@@ -1,4 +1,9 @@
+#include "About.h"
+#include "Battery.h"
 #include "Common.h"
+#include "WiFiManager.h"
+#include "Scan.h"
+#include "Station.h"
 #include "Themes.h"
 #include "Storage.h"
 #include "Utils.h"
@@ -226,7 +231,7 @@ void drawFrequency(uint32_t freq, int x, int y, int ux, int uy, uint8_t hl)
       // AM frequency
       spr.drawNumber(freq, x, y, 7);
       spr.setTextDatum(ML_DATUM);
-      spr.drawString(".000", 4+x, 17+y, 4);
+      spr.drawString(F(".000"), 4+x, 17+y, 4);
     }
 
     // SSB/AM frequencies are measured in kHz

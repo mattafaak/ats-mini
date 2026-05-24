@@ -231,36 +231,10 @@ extern volatile bool seekStop;
 
 static inline bool isSSB() { return(radioState.mode>FM && radioState.mode<AM); }
 
-// Battery.c
-float batteryMonitor();
-bool drawBattery(int x, int y);
-
-// Scan.c
-void scanRun(uint16_t centerFreq, uint16_t step);
-float scanGetRSSI(uint16_t freq);
-float scanGetSNR(uint16_t freq);
-
-// Station.c
-bool processRssiSnr();
-const char *getStationName();
-const char *getRadioText();
-const char *getProgramInfo();
-const char *getRdsTime();
-uint16_t getRdsPiCode();
-void clearStationInfo();
-bool checkRds();
-bool identifyFrequency(uint16_t freq, bool periodic = false);
-
 // Network.cpp
-int8_t getWiFiStatus();
-char *getWiFiIPAddress();
 void netInit(uint8_t netMode, bool showStatus = true);
-void netStop();
 bool ntpIsAvailable();
 bool ntpSyncTime();
-
-void netRequestConnect();
-void netTickTime();
 
 // Remote.c
 #define REMOTE_CHANGED   1

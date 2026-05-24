@@ -1,5 +1,7 @@
 #include "driver/rtc_io.h"
 #include "Common.h"
+#include "WiFiManager.h"
+#include "Station.h"
 #include "Themes.h"
 #include "Button.h"
 #include "Utils.h"

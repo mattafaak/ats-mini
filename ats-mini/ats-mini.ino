@@ -2,6 +2,7 @@
 // INCLUDE FILES
 // =================================
 
+#include "About.h"
 #include "Common.h"
 #include <Wire.h>
 #include "Rotary.h"
@@ -22,7 +23,6 @@
 RadioState radioState = {0};
 
 // SI473/5 and UI
-#define MIN_ELAPSED_TIME         5  // 300
 #define ELAPSED_COMMAND      10000  // time to turn off the last command controlled by encoder. Time to goes back to the VFO control // G8PTN: Increased time and corrected comment
 #define DEFAULT_VOLUME          35  // change it for your favorite sound volume
 #define DEFAULT_SLEEP            0  // Default sleep interval, range = 0 (off) to 255 in steps of 5
@@ -178,10 +178,6 @@ void setup()
   }
 
   rx.setup(RESET_PIN, MW_BAND_TYPE);
-  // Comment the line above and uncomment the three lines below if you are using external ref clock (active crystal or signal generator)
-  // rx.setRefClock(32768);
-  // rx.setRefClockPrescaler(1);   // will work with 32768
-  // rx.setup(RESET_PIN, 0, MW_BAND_TYPE, SI473X_ANALOG_AUDIO, XOSCEN_RCLK);
 
   // Attached pin to allows SI4732 library to mute audio as required to minimise loud clicks
   rx.setAudioMuteMcuPin(AUDIO_MUTE);
@@ -290,7 +286,6 @@ void loop()
   // Disable commands control
   if((currentTime - elapsedCommand) > ELAPSED_COMMAND)
   {
-    // if(getCpuFrequencyMhz()!=80) setCpuFrequencyMhz(80);
     if(radioState.cmd != CMD_NONE && radioState.cmd != CMD_SEEK && radioState.cmd != CMD_SCAN && radioState.cmd != CMD_MEMORY)
     {
       radioState.cmd = CMD_NONE;
@@ -314,7 +309,15 @@ void loop()
   // Redraw screen if necessary
   if(needRedraw) drawScreen();
 
-  // Add a default delay in the main loop to reduce idle CPU wakeups
-  // All periodic tasks use millis()-based timing so a longer delay is safe.
-  delay(20);
+  // Adaptive loop delay for better encoder responsiveness
+  static uint32_t lastActivity = 0;
+  uint32_t now = millis();
+  if (encoderCount != 0 || radioState.cmd != CMD_NONE) {
+      lastActivity = now;
+      delay(5);
+  } else if ((now - lastActivity) > 2000) {
+      delay(50);
+  } else {
+      delay(20);
+  }
 }

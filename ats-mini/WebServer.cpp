@@ -1,3 +1,4 @@
+#include "Battery.h"
 #include "Common.h"
 #include "WiFiManager.h"
 #include "WebServer.h"

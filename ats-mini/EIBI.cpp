@@ -1,7 +1,9 @@
 #include "Common.h"
+#include "WiFiManager.h"
 #include "Draw.h"
 #include "EIBI.h"
 #include "Button.h"
+#include "Station.h"
 
 #include <HTTPClient.h>
 #include <WiFi.h>

@@ -115,13 +115,13 @@ bool wifiInitConnection(uint8_t netMode, bool showStatus)
       // Start WiFi access point if requested
       WiFi.mode(WIFI_AP);
       // Let user see connection status if successful
-      if(wifiInitAP() && showStatus) delay(2000);
+      if(wifiInitAP() && showStatus) delay(500);
       return(false);
     case NET_AP_CONNECT:
       // Start WiFi access point if requested
       WiFi.mode(WIFI_AP_STA);
       // Let user see connection status if successful
-      if(wifiInitAP() && showStatus) delay(2000);
+      if(wifiInitAP() && showStatus) delay(500);
       break;
     default:
       // No access point
@@ -133,7 +133,7 @@ bool wifiInitConnection(uint8_t netMode, bool showStatus)
   if(netMode>NET_AP_ONLY && wifiConnect())
   {
     // Let user see connection status if successful
-    if(netMode!=NET_SYNC && showStatus) delay(2000);
+    if(netMode!=NET_SYNC && showStatus) delay(500);
     return(true);
   }
 

@@ -60,8 +60,6 @@ void drawTopBar();
 void drawLayoutDefault(const char *statusLine1, const char *statusLine2);
 void drawLayoutSmeter(const char *statusLine1, const char *statusLine2);
 
-void drawAbout();
-void drawAboutHelp(uint8_t arrow);
 
 extern SI4735_fixed rx;
 extern TFT_eSprite spr;

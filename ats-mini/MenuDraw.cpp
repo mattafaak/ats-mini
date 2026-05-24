@@ -1,4 +1,5 @@
 #include "Common.h"
+#include "Station.h"
 #include "Themes.h"
 #include "MenuData.h"
 #include "Utils.h"
@@ -32,7 +33,7 @@ static void drawMenu(int x, int y, int sx)
   spr.fillSmoothRoundRect(2+x, 2+y, 74+sx, 108, 4, TH.menu_bg);
   spr.setTextColor(TH.menu_hdr);
 
-  spr.drawString("Menu", 40+x+(sx/2), 12+y, 2);
+  spr.drawString(F("Menu"), 40+x+(sx/2), 12+y, 2);
   spr.drawLine(1+x, 23+y, 76+sx, 23+y, TH.menu_border);
 
   spr.setTextFont(0);
@@ -60,7 +61,7 @@ static void drawSettings(int x, int y, int sx)
   spr.fillSmoothRoundRect(1+x, 1+y, 76+sx, 110, 4, TH.menu_border);
   spr.fillSmoothRoundRect(2+x, 2+y, 74+sx, 108, 4, TH.menu_bg);
   spr.setTextColor(TH.menu_hdr);
-  spr.drawString("Settings", 40+x+(sx/2), 12+y, 2);
+  spr.drawString(F("Settings"), 40+x+(sx/2), 12+y, 2);
   spr.drawLine(1+x, 23+y, 76+sx, 23+y, TH.menu_border);
 
   spr.setTextFont(0);
@@ -144,9 +145,9 @@ static void drawScan(int x, int y, int sx)
   drawCommon(menu[MENU_SCAN], x, y, sx);
   spr.setTextDatum(MC_DATUM);
   spr.setTextColor(TH.scan_rssi);
-  spr.drawString("S", 40+x+(sx/2)-30, 66+y+30, 2);
+  spr.drawString(F("S"), 40+x+(sx/2)-30, 66+y+30, 2);
   spr.setTextColor(TH.scan_snr);
-  spr.drawString("N", 40+x+(sx/2)+30, 66+y+30, 2);
+  spr.drawString(F("N"), 40+x+(sx/2)+30, 66+y+30, 2);
 
   spr.drawSmoothArc(40+x+(sx/2), 66+y, 30, 27, 45, 180, TH.menu_param, TH.menu_bg);
   spr.fillTriangle(40+x+(sx/2)-5, 66+y-32, 40+x+(sx/2)+5, 66+y-27, 40+x+(sx/2)-5, 66+y-22, TH.menu_param);
@@ -428,13 +429,11 @@ static void drawAgc(int x, int y, int sx)
   spr.setTextDatum(MC_DATUM);
   spr.setTextColor(TH.menu_param);
 
-  // G8PTN: Read back value is not used
-  // rx.getAutomaticGainControl();
   if(!radioState.agcNdxVal && !radioState.agcIndex)
   {
     spr.setFreeFont(&Orbitron_Light_24);
-    spr.drawString("AGC", 40+x+(sx/2), 48+y);
-    spr.drawString("On", 40+x+(sx/2), 72+y);
+    spr.drawString(F("AGC"), 40+x+(sx/2), 48+y);
+    spr.drawString(F("On"), 40+x+(sx/2), 72+y);
     spr.setTextFont(0);
   }
   else
@@ -460,8 +459,8 @@ static void drawSquelch(int x, int y, int sx)
   }
   else
   {
-    spr.drawString("Off", 40+x+(sx/2), 60+y, 4);
-    spr.drawString(squelchParam? "(snr)":"(rssi)", 40+x+(sx/2), 90+y, 4);
+    spr.drawString(F("Off"), 40+x+(sx/2), 60+y, 4);
+    spr.drawString(squelchParam? F("(snr)"):F("(rssi)"), 40+x+(sx/2), 90+y, 4);
   }
 }
 
@@ -472,7 +471,7 @@ static void drawSoftMuteMaxAtt(int x, int y, int sx)
   spr.setTextDatum(MC_DATUM);
 
   spr.setTextColor(TH.menu_param);
-  spr.drawString("Max Attn", 40+x+(sx/2), 32+y, 2);
+  spr.drawString(F("Max Attn"), 40+x+(sx/2), 32+y, 2);
   spr.drawNumber(radioState.softMuteMaxAtt, 40+x+(sx/2), 60+y, 4);
   spr.drawString(STR_DB, 40+x+(sx/2), 90+y, 4);
 }
@@ -486,12 +485,12 @@ static void drawCal(int x, int y, int sx)
   spr.setTextColor(TH.menu_param);
   if (radioState.mode == USB)
   {
-    spr.drawString("USB", 40+x+(sx/2), 35+y, 2);
+    spr.drawString(F("USB"), 40+x+(sx/2), 35+y, 2);
     spr.drawNumber(getCurrentBand()->usbCal, 40+x+(sx/2), 65+y, 4);
   }
   else if (radioState.mode == LSB)
   {
-    spr.drawString("LSB", 40+x+(sx/2), 35+y, 2);
+    spr.drawString(F("LSB"), 40+x+(sx/2), 35+y, 2);
     spr.drawNumber(getCurrentBand()->lsbCal, 40+x+(sx/2), 65+y, 4);
   }
   else
@@ -507,7 +506,7 @@ static void drawAvc(int x, int y, int sx)
   spr.setTextDatum(MC_DATUM);
 
   spr.setTextColor(TH.menu_param);
-  spr.drawString("Max Gain", 40+x+(sx/2), 32+y, 2);
+  spr.drawString(F("Max Gain"), 40+x+(sx/2), 32+y, 2);
 
   // Only show AVC for AM and SSB modes
   if(radioState.mode!=FM)
@@ -569,7 +568,7 @@ static void drawZoom(int x, int y, int sx)
   spr.setTextDatum(MC_DATUM);
 
   spr.setTextColor(TH.menu_param);
-  spr.drawString(radioState.zoomLevel ? "On" : "Off", 40+x+(sx/2), 60+y, 4);
+  spr.drawString(radioState.zoomLevel ? F("On") : F("Off"), 40+x+(sx/2), 60+y, 4);
 }
 
 static void drawScrollDir(int x, int y, int sx)
@@ -594,25 +593,25 @@ static void drawInfo(int x, int y, int sx)
   spr.fillSmoothRoundRect(1+x, 1+y, 76+sx, 110, 4, TH.box_border);
   spr.fillSmoothRoundRect(2+x, 2+y, 74+sx, 108, 4, TH.box_bg);
 
-  spr.drawString("Step:", 6+x, 64+y+(-3*16), 2);
+  spr.drawString(F("Step:"), 6+x, 64+y+(-3*16), 2);
   spr.drawString(getCurrentStep()->desc, 48+x, 64+y+(-3*16), 2);
 
-  spr.drawString("BW:", 6+x, 64+y+(-2*16), 2);
+  spr.drawString(F("BW:"), 6+x, 64+y+(-2*16), 2);
   spr.drawString(getCurrentBandwidth()->desc, 48+x, 64+y+(-2*16), 2);
 
   if(!radioState.agcNdxVal && !radioState.agcIndex)
   {
-    spr.drawString("AGC:", 6+x, 64+y+(-1*16), 2);
-    spr.drawString("On", 48+x, 64+y+(-1*16), 2);
+    spr.drawString(F("AGC:"), 6+x, 64+y+(-1*16), 2);
+    spr.drawString(F("On"), 48+x, 64+y+(-1*16), 2);
   }
   else
   {
     sprintf(text, "%2.2d", radioState.agcNdxVal);
-    spr.drawString("Att:", 6+x, 64+y+(-1*16), 2);
+    spr.drawString(F("Att:"), 6+x, 64+y+(-1*16), 2);
     spr.drawString(text, 48+x, 64+y+(-1*16), 2);
   }
 
-  spr.drawString("Vol:", 6+x, 64+y+(0*16), 2);
+  spr.drawString(F("Vol:"), 6+x, 64+y+(0*16), 2);
   if(audioIsMainMuted() || audioIsSquelched())
   {
     spr.setTextColor(TH.box_off_text, TH.box_off_bg);
@@ -631,12 +630,12 @@ static void drawInfo(int x, int y, int sx)
   if(piCode && radioState.mode == FM)
   {
     sprintf(text, "%04X", piCode);
-    spr.drawString("PI:", 6+x, 64+y + (1*16), 2);
+    spr.drawString(F("PI:"), 6+x, 64+y + (1*16), 2);
     spr.drawString(text, 48+x, 64+y + (1*16), 2);
   }
   else
   {
-    spr.drawString("AVC:", 6+x, 64+y + (1*16), 2);
+    spr.drawString(F("AVC:"), 6+x, 64+y + (1*16), 2);
 
     if(radioState.mode==FM)
       sprintf(text, "n/a");
@@ -651,7 +650,7 @@ static void drawInfo(int x, int y, int sx)
   // Draw current time
   if(clockGet())
   {
-    spr.drawString("Time:", 6+x, 64+y+(2*16), 2);
+    spr.drawString(F("Time:"), 6+x, 64+y+(2*16), 2);
     spr.drawString(clockGet(), 48+x, 64+y+(2*16), 2);
   }
 }

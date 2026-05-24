@@ -1,4 +1,5 @@
 #include "Common.h"
+#include "Station.h"
 #include "Themes.h"
 #include "Menu.h"
 #include "MenuDraw.h"
@@ -99,9 +100,9 @@ static void drawLargeSMeter(int rssi, int strength, int x, int y)
       int text_width = 0;
       int text_x = x + (i * 15) - 13;
       if(i < 10)  text_width = spr.drawNumber(i, text_x, 20+y, 2);
-      if(i == 11) text_width = spr.drawString("+20", text_x, 20+y, 2);
-      if(i == 13) text_width = spr.drawString("+40", text_x, 20+y, 2);
-      if(i == 15) text_width = spr.drawString("+60", text_x, 20+y, 2);
+      if(i == 11) text_width = spr.drawString(F("+20"), text_x, 20+y, 2);
+      if(i == 13) text_width = spr.drawString(F("+40"), text_x, 20+y, 2);
+      if(i == 15) text_width = spr.drawString(F("+60"), text_x, 20+y, 2);
 
       // Draw the dotted line from end of previous number to start of current number
       for(int px=last_x; px<text_x-text_width/2; px++) {
@@ -117,7 +118,7 @@ static void drawLargeSMeter(int rssi, int strength, int x, int y)
   }
 
   spr.setTextDatum(BL_DATUM);
-  spr.drawString("S", x - 10, 36 + y, 2);
+  spr.drawString(F("S"), x - 10, 36 + y, 2);
   spr.setTextDatum(BR_DATUM);
   spr.drawNumber(rssi, x - 15, 40 + y, 4);
 
@@ -135,7 +136,7 @@ static void drawLargeSNMeter(int snr, int x, int y)
 {
   spr.setTextColor(TH.scale_text);
   spr.setTextDatum(BL_DATUM);
-  spr.drawString("N", x - 10, 12 + y, 2);
+  spr.drawString(F("N"), x - 10, 12 + y, 2);
   spr.setTextDatum(BR_DATUM);
   spr.drawNumber(snr, x - 15, 16 + y, 4);
 

@@ -10,6 +10,7 @@
 #include "Station.h"
 #include "Tuning.h"
 #include "AudioManager.h"
+#include "Scan.h"
 
 #include <WiFi.h>
 #include <AsyncTCP.h>
@@ -371,6 +372,67 @@ void webInit()
       prefsRequestSave(SAVE_SETTINGS, true);
     }
     request->send(200, "application/json", "{\"status\":\"ok\"}");
+  });
+
+  // Scan-to-memory API
+  server.on("/api/scan", HTTP_POST, [](AsyncWebServerRequest *request) {
+    String cmd = request->arg("cmd");
+
+    // Status poll — non-blocking, returns JSON
+    if (cmd == "status" || cmd == "poll") {
+      const ScanStatus *s = scanGetStatus();
+      String json = "{";
+      json += "\"running\":" + String(s->running) + ",";
+      json += "\"mode\":" + String(s->mode) + ",";
+      json += "\"current_freq\":" + String(s->currentFreq) + ",";
+      json += "\"current_rssi\":" + String(s->currentRSSI) + ",";
+      json += "\"current_snr\":" + String(s->currentSNR) + ",";
+      json += "\"progress_pct\":" + String(s->progress) + ",";
+      json += "\"bookmark_count\":" + String(s->bookmarkCount) + ",\"bookmarks\":[";
+      for (int i = 0; i < s->bookmarkCount; i++) {
+        if (i) json += ",";
+        json += String(s->bookmarks[i]);
+      }
+      json += "],\"result_count\":" + String(s->resultCount) + ",\"results\":[";
+      for (int i = 0; i < s->resultCount; i++) {
+        if (i) json += ",";
+        json += "{\"slot\":" + String(s->results[i].slot) +
+                ",\"freq\":" + String(s->results[i].freq) +
+                ",\"rssi\":" + String(s->results[i].rssi) +
+                ",\"name\":\"" + String(s->results[i].name) + "\"}";
+      }
+      json += "]}";
+      request->send(200, "application/json", json);
+      return;
+    }
+
+    // Start scan
+    if (cmd == "scan" || cmd == "start") {
+      if (scanIsRunning()) {
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Scan already running\"}");
+        return;
+      }
+      String mode = request->arg("mode");
+      if (mode == "auto") {
+        int n = constrain(request->arg("n").toInt(), 1, 20);
+        scanToMemoryAuto(n);
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+      } else if (mode == "manual") {
+        scanToMemoryManual();
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+      } else {
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Use mode=auto or mode=manual\"}");
+      }
+      return;
+    }
+
+    // Manual scan: step one frequency, bookmark, stop
+    if (cmd == "step") { scanManualStep(); request->send(200, "application/json", "{\"status\":\"ok\"}"); return; }
+    if (cmd == "bookmark") { scanBookmark(); request->send(200, "application/json", "{\"status\":\"ok\"}"); return; }
+    if (cmd == "stop") { scanStop(); request->send(200, "application/json", "{\"status\":\"ok\"}"); return; }
+    if (cmd == "abort") { scanAbort(); request->send(200, "application/json", "{\"status\":\"ok\"}"); return; }
+
+    request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Unknown scan cmd\"}");
   });
 
   // Start web server

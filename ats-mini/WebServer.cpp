@@ -449,11 +449,10 @@ static const String webRadioPage()
   "<TD>" + String(batteryMonitor()) + "V</TD>"
 "</TR>"
 "</TABLE>"
-"<FORM ACTION='/api/command' METHOD='POST' STYLE='text-align:center;margin-top:1em'>"
-"<INPUT TYPE='hidden' NAME='cmd' VALUE='band'>"
-"<INPUT TYPE='submit' NAME='value' VALUE='prev' STYLE='width:auto;padding:0.5em 1em'>&nbsp;"
-"<INPUT TYPE='submit' NAME='value' VALUE='next' STYLE='width:auto;padding:0.5em 1em'>"
-"</FORM>"
+"<DIV STYLE='text-align:center;margin-top:1em'>"
+"<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=prev'})\" STYLE='width:auto;padding:0.5em 1em'>Prev Band</BUTTON>&nbsp;"
+"<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=next'})\" STYLE='width:auto;padding:0.5em 1em'>Next Band</BUTTON>"
+"</DIV>"
 , 5);  // auto-refresh every 5 seconds
 }
 
@@ -475,7 +474,8 @@ static const String webMemoryPage()
       String freq = memories[j].mode == FM?
         String(memories[j].freq / 1000000.0) + "MHz "
       : String(memories[j].freq / 1000.0) + "kHz ";
-      items += freq + bandModeDesc[memories[j].mode] + "</TD></TR>";
+      String memName = memories[j].name[0] ? " - " + String(memories[j].name) : "";
+      items += freq + memName + " " + String(bandModeDesc[memories[j].mode]) + "</TD></TR>";
     }
   }
 

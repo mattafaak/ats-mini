@@ -43,10 +43,21 @@ static const String webMemoryPage();
 static const String webControlsPage();
 static const String webScanPage();
 
+// Convert RGB565 (uint16_t) to 24-bit RGB for CSS
+static uint32_t rgb565to888(uint16_t c) {
+  uint32_t r = ((c >> 11) & 0x1F);
+  uint32_t g = ((c >> 5) & 0x3F);
+  uint32_t b = (c & 0x1F);
+  r = (r << 3) | (r >> 2);
+  g = (g << 2) | (g >> 4);
+  b = (b << 3) | (b >> 2);
+  return (r << 16) | (g << 8) | b;
+}
+
 // Helper: append a hex color field to JSON string
 static void jsonColor(String &json, const char *key, uint16_t color) {
   char buf[32];
-  snprintf(buf, sizeof(buf), "\"%s\":\"#%04X\",", key, color);
+  snprintf(buf, sizeof(buf), "\"%s\":\"#%06X\",", key, rgb565to888(color));
   json += buf;
 }
 
@@ -224,7 +235,12 @@ void webInit()
     if (cmd == "mode") {
       int idx = value.toInt();
       if (idx < 0 || idx > 3) { request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Bad mode\"}"); return; }
-      doMode(idx - radioState.mode);
+      if (idx == 0) {
+        // FM mode only exists on the FM band — doBand() switches to it
+        doBand(0 - bandIdx);
+      } else {
+        doMode(idx - radioState.mode);
+      }
       request->send(200, "application/json", "{\"status\":\"ok\"}");
       return;
     }
@@ -376,8 +392,8 @@ void webInit()
     if(loginUsername != "" && loginPassword != "")
       if(!request->authenticate(loginUsername.c_str(), loginPassword.c_str()))
         return request->requestAuthentication();
-    if(request->hasParam("idx")) {
-      themeIdx = constrain(request->getParam("idx")->value().toInt(), 0, getTotalThemes() - 1);
+    if(request->hasParam("idx", true)) {
+      themeIdx = constrain(request->getParam("idx", true)->value().toInt(), 0, getTotalThemes() - 1);
       prefsRequestSave(SAVE_SETTINGS, true);
     }
     request->send(200, "application/json", "{\"status\":\"ok\"}");
@@ -544,21 +560,25 @@ static const String webStyleSheet() {
 "H1{text-align:center;color:var(--menu-hdr)}"
 "TABLE{width:100%;max-width:768px;border:0;margin:auto}"
 "TH,TD{padding:0.5em}"
-"TH.HEADING{background:var(--menu-hdr);color:var(--menu-hl-text);text-align:center}"
+"TH.HEADING{background:var(--menu-bg);color:var(--menu-hdr);border:2px solid var(--menu-border);text-align:center}"
 "TD.LABEL{text-align:right;color:var(--param)}"
 "INPUT[type=text],INPUT[type=password],SELECT{"
   "width:95%;padding:0.5em;"
   "background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border)"
 "}"
 "INPUT[type=submit],BUTTON{"
-  "padding:0.5em 1em;"
-  "background:var(--button-bg);color:var(--button-text);border:1px solid var(--menu-border);cursor:pointer"
+  "padding:0.5em 1em;margin:0.15em;"
+  "background:var(--button-bg);color:var(--button-text);"
+  "border:1px solid var(--menu-border);border-radius:6px;cursor:pointer;font-size:1em"
 "}"
+"BUTTON:hover{background:var(--menu-hl-bg)}"
 ".CENTER{text-align:center}"
 "NAV{text-align:center;padding:0.5em;background:var(--nav-bg);border-bottom:1px solid var(--menu-border)}"
 "NAV A{color:var(--nav-text);text-decoration:none;margin:0 0.5em}"
 "NAV A:hover{color:var(--menu-hl-text)}"
 ".SLIDER{width:80%}"
+".BTN-GROUP{display:flex;flex-wrap:wrap;gap:0.4em;align-items:center;margin:0.4em 0}"
+".CTRL-ROW{margin:0.6em 0}"
 "@media(max-width:480px){"
   "INPUT[type=text],SELECT{width:98%}"
   ".SLIDER{width:100%}"
@@ -572,33 +592,33 @@ static const String webThemeVars() {
   char buf[600];
   snprintf(buf, sizeof(buf),
     "<STYLE>:root{"
-    "--bg:#%04X;--fg:#%04X;"
-    "--menu-bg:#%04X;--menu-border:#%04X;"
-    "--menu-item:#%04X;--menu-hdr:#%04X;"
-    "--menu-hl-bg:#%04X;--menu-hl-text:#%04X;"
-    "--param:#%04X;"
-    "--box-bg:#%04X;--box-border:#%04X;--box-text:#%04X;"
-    "--box-off-bg:#%04X;--box-off-text:#%04X;"
-    "--scan-rssi:#%04X;--scan-snr:#%04X;"
-    "--s-meter:#%04X;"
-    "--nav-bg:#%04X;--nav-text:#%04X;"
-    "--input-bg:#%04X;--input-border:#%04X;"
-    "--input-text:#%04X;"
-    "--button-bg:#%04X;--button-text:#%04X;"
+    "--bg:#%06X;--fg:#%06X;"
+    "--menu-bg:#%06X;--menu-border:#%06X;"
+    "--menu-item:#%06X;--menu-hdr:#%06X;"
+    "--menu-hl-bg:#%06X;--menu-hl-text:#%06X;"
+    "--param:#%06X;"
+    "--box-bg:#%06X;--box-border:#%06X;--box-text:#%06X;"
+    "--box-off-bg:#%06X;--box-off-text:#%06X;"
+    "--scan-rssi:#%06X;--scan-snr:#%06X;"
+    "--s-meter:#%06X;"
+    "--nav-bg:#%06X;--nav-text:#%06X;"
+    "--input-bg:#%06X;--input-border:#%06X;"
+    "--input-text:#%06X;"
+    "--button-bg:#%06X;--button-text:#%06X;"
     "}</STYLE>",
-    TH.bg, TH.text,
-    TH.menu_bg, TH.menu_border,
-    TH.menu_item, TH.menu_hdr,
-    TH.menu_hl_bg, TH.menu_hl_text,
-    TH.menu_param,
-    TH.box_bg, TH.box_border, TH.box_text,
-    TH.box_off_bg, TH.box_off_text,
-    TH.scan_rssi, TH.scan_snr,
-    TH.smeter_bar,
-    TH.menu_bg, TH.menu_item,
-    TH.menu_bg, TH.menu_border,
-    TH.text,
-    TH.menu_hl_bg, TH.menu_hl_text
+    rgb565to888(TH.bg), rgb565to888(TH.text),
+    rgb565to888(TH.menu_bg), rgb565to888(TH.menu_border),
+    rgb565to888(TH.menu_item), rgb565to888(TH.menu_hdr),
+    rgb565to888(TH.menu_hl_bg), rgb565to888(TH.menu_hl_text),
+    rgb565to888(TH.menu_param),
+    rgb565to888(TH.box_bg), rgb565to888(TH.box_border), rgb565to888(TH.box_text),
+    rgb565to888(TH.box_off_bg), rgb565to888(TH.box_off_text),
+    rgb565to888(TH.scan_rssi), rgb565to888(TH.scan_snr),
+    rgb565to888(TH.smeter_bar),
+    rgb565to888(TH.menu_bg), rgb565to888(TH.menu_item),
+    rgb565to888(TH.menu_bg), rgb565to888(TH.menu_border),
+    rgb565to888(TH.text),
+    rgb565to888(TH.menu_hl_bg), rgb565to888(TH.menu_hl_text)
   );
   return String(buf);
 }
@@ -811,7 +831,7 @@ static const String webRadioPage()
 "<TR><TD CLASS='LABEL'>IP Address</TD><TD><A HREF='http://" + ip + "'>" + ip + "</A> (" + ssid + ")</TD></TR>"
 "<TR><TD CLASS='LABEL'>Firmware</TD><TD>" + String(getVersion(true)) + "</TD></TR>"
 "</TABLE>"
-, 5);
+);
 }
 
 static const String webControlsPage()
@@ -823,12 +843,12 @@ static const String webControlsPage()
 // Tuning section
 "<TR><TH CLASS='HEADING'>Tuning</TH></TR>"
 "<TR><TD>"
-  "Freq: <INPUT TYPE='text' ID='f' SIZE='10'> "
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=tune&value='+document.getElementById('f').value})\">Go</BUTTON>"
-  "<BR>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=seek&value=down'})\">&lt;&lt; Seek</BUTTON> "
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=seek&value=up'})\">Seek &gt;&gt;</BUTTON>"
-  "<BR>Step: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=step&value='+this.value})\">"
+  "<DIV CLASS='CTRL-ROW'>Freq: <INPUT TYPE='text' ID='f' SIZE='10'> "
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=tune&value='+document.getElementById('f').value})\">Go</BUTTON></DIV>"
+  "<DIV CLASS='BTN-GROUP'>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=seek&value=down'})\">&lt;&lt; Seek</BUTTON>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=seek&value=up'})\">Seek &gt;&gt;</BUTTON></DIV>"
+  "<DIV CLASS='CTRL-ROW'>Step: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=step&value='+this.value})\">"
     "<OPTION VALUE='0'>Auto</OPTION><OPTION VALUE='1'>1</OPTION><OPTION VALUE='2'>5</OPTION>"
     "<OPTION VALUE='3'>9</OPTION><OPTION VALUE='4'>10</OPTION><OPTION VALUE='5'>100</OPTION>"
   "</SELECT>"
@@ -837,29 +857,30 @@ static const String webControlsPage()
 // Audio section
 "<TR><TH CLASS='HEADING'>Audio</TH></TR>"
 "<TR><TD>"
-  "Vol: <INPUT TYPE='range' MIN='0' MAX='63' VALUE='" + String(radioState.vol) + "' CLASS='SLIDER' "
+  "<DIV CLASS='CTRL-ROW'>Vol: <INPUT TYPE='range' MIN='0' MAX='63' VALUE='" + String(radioState.vol) + "' CLASS='SLIDER' "
   "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=volume&value='+this.value})\"> "
-  "<SPAN>" + String(radioState.vol) + "</SPAN>"
-  "<BR>"
-  "<BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=mute&value='+(b.textContent=='Mute')});b.textContent=b.textContent=='Mute'?'Unmute':'Mute'\">Mute</BUTTON>"
-  "<BR>Squelch: <INPUT TYPE='range' MIN='0' MAX='127' VALUE='0' CLASS='SLIDER' "
-  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=squelch&value='+this.value})\">"
-  "<BR><BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=rssi'})\">RSSI</BUTTON> "
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=snr'})\">SNR</BUTTON>"
+  "<SPAN>" + String(radioState.vol) + "</SPAN></DIV>"
+  "<DIV CLASS='CTRL-ROW'><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=mute&value='+(b.textContent=='Mute')});b.textContent=b.textContent=='Mute'?'Unmute':'Mute'\">Mute</BUTTON></DIV>"
+  "<DIV CLASS='CTRL-ROW'>Squelch: <INPUT TYPE='range' MIN='0' MAX='127' VALUE='0' CLASS='SLIDER' "
+  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=squelch&value='+this.value})\"></DIV>"
+  "<DIV CLASS='BTN-GROUP'>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=rssi'})\">RSSI</BUTTON>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=snr'})\">SNR</BUTTON></DIV>"
 "</TD></TR>"
 
 // Band/Mode section
 "<TR><TH CLASS='HEADING'>Band / Mode</TH></TR>"
 "<TR><TD>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=prev'})\">Prev</BUTTON> "
-  "<SPAN>" + String(getCurrentBand()->bandName) + "</SPAN> "
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=next'})\">Next</BUTTON>"
-  "<BR>"
+  "<DIV CLASS='BTN-GROUP'>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=prev'})\">Prev</BUTTON>"
+  "<SPAN>" + String(getCurrentBand()->bandName) + "</SPAN>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=next'})\">Next</BUTTON></DIV>"
+  "<DIV CLASS='BTN-GROUP'>"
   "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=0'})\">FM</BUTTON>"
   "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=1'})\">AM</BUTTON>"
   "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=2'})\">LSB</BUTTON>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=3'})\">USB</BUTTON>"
-  "<BR>BW: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=bandwidth&value='+this.value})\">"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=3'})\">USB</BUTTON></DIV>"
+  "<DIV CLASS='CTRL-ROW'>BW: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=bandwidth&value='+this.value})\">"
     "<OPTION>Auto</OPTION><OPTION>1.0k</OPTION><OPTION>2.0k</OPTION>"
     "<OPTION>2.5k</OPTION><OPTION>3.0k</OPTION><OPTION>4.0k</OPTION><OPTION>6.0k</OPTION>"
   "</SELECT>"
@@ -868,27 +889,28 @@ static const String webControlsPage()
 // Settings section
 "<TR><TH CLASS='HEADING'>Settings</TH></TR>"
 "<TR><TD>"
-  "AGC: <INPUT TYPE='range' MIN='0' MAX='37' VALUE='" + String(radioState.agcIndex) + "' CLASS='SLIDER' "
-  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=agc&value='+this.value})\">"
-  "<BR>AVC: <INPUT TYPE='range' MIN='0' MAX='90' VALUE='0' CLASS='SLIDER' "
-  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=avc&value='+this.value})\">"
-  "<BR>Cal: <BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=cal&value=-1'})\">-</BUTTON> "
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=cal&value=1'})\">+</BUTTON>"
-  "<BR>Brightness: <INPUT TYPE='range' MIN='10' MAX='255' VALUE='" + String(radioState.brightness) + "' CLASS='SLIDER' "
-  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=brightness&value='+this.value})\">"
-  "<BR><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=sleep&value='+(b.textContent=='Sleep')});b.textContent=b.textContent=='Sleep'?'Wake':'Sleep'\">Sleep</BUTTON>"
-  "<BR>FM Region: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=fm_region&value='+this.value})\">"
+  "<DIV CLASS='CTRL-ROW'>AGC: <INPUT TYPE='range' MIN='0' MAX='37' VALUE='" + String(radioState.agcIndex) + "' CLASS='SLIDER' "
+  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=agc&value='+this.value})\"></DIV>"
+  "<DIV CLASS='CTRL-ROW'>AVC: <INPUT TYPE='range' MIN='0' MAX='90' VALUE='0' CLASS='SLIDER' "
+  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=avc&value='+this.value})\"></DIV>"
+  "<DIV CLASS='BTN-GROUP'>Cal: <BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=cal&value=-1'})\">-</BUTTON>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=cal&value=1'})\">+</BUTTON></DIV>"
+  "<DIV CLASS='CTRL-ROW'>Brightness: <INPUT TYPE='range' MIN='10' MAX='255' VALUE='" + String(radioState.brightness) + "' CLASS='SLIDER' "
+  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=brightness&value='+this.value})\"></DIV>"
+  "<DIV CLASS='BTN-GROUP'>"
+  "<BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=sleep&value='+(b.textContent=='Sleep')});b.textContent=b.textContent=='Sleep'?'Wake':'Sleep'\">Sleep</BUTTON>"
+  "<BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=zoom&value='+(b.textContent=='Zoom')});b.textContent=b.textContent=='Zoom'?'Normal':'Zoom'\">Zoom</BUTTON>"
+  "<BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=scroll&value='+(b.textContent=='Normal'?'reverse':'normal')});b.textContent=b.textContent=='Normal'?'Reverse':'Normal'\">Normal</BUTTON></DIV>"
+  "<DIV CLASS='CTRL-ROW'>FM Region: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=fm_region&value='+this.value})\">"
     "<OPTION VALUE='0'>USA</OPTION><OPTION VALUE='1'>Europe</OPTION><OPTION VALUE='2'>Japan</OPTION>"
-  "</SELECT>"
-  "<BR>RDS: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=rds&value='+this.value})\">"
+  "</SELECT></DIV>"
+  "<DIV CLASS='CTRL-ROW'>RDS: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=rds&value='+this.value})\">"
     "<OPTION VALUE='0'>Off</OPTION><OPTION VALUE='1'>PS</OPTION><OPTION VALUE='7'>PS+PI+CT</OPTION>"
-  "</SELECT>"
-  "<BR><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=zoom&value='+(b.textContent=='Zoom')});b.textContent=b.textContent=='Zoom'?'Normal':'Zoom'\">Zoom</BUTTON>"
-  "<BR><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=scroll&value='+(b.textContent=='Normal'?'reverse':'normal')});b.textContent=b.textContent=='Normal'?'Reverse':'Normal'\">Normal</BUTTON>"
+  "</SELECT></DIV>"
 "</TD></TR>"
 
 "</TABLE>"
-, 5);
+);
 }
 
 static const String webMemoryPage()

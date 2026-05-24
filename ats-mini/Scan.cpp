@@ -208,6 +208,9 @@ void scanToMemoryAuto(uint8_t count) {
         goto restore;
       }
 
+      // delay(1) yields to FreeRTOS, feeding the watchdog
+      delay(1);
+
       if (isSSB()) updateBFO(0, true);
       if (updateFrequency(freq, false)) {
         uint32_t t = millis();

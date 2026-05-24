@@ -585,6 +585,18 @@ def _curl(method, url, data=None, timeout=10):
     status = int(lines[-1]) if lines[-1].isdigit() else 0
     return status, body
 
+def get_web_ip():
+    """Try mDNS, fallback to AP IP."""
+    import subprocess
+    try:
+        result = subprocess.run(["avahi-resolve-host-name", "atsmini.local"],
+                              capture_output=True, text=True, timeout=3)
+        if result.returncode == 0:
+            return result.stdout.strip().split('\t')[1]
+    except:
+        pass
+    return "10.1.1.1"  # AP fallback
+
 def test_web_api():
     """Test /api/status and /api/command if WiFi is available."""
     import json
@@ -683,6 +695,185 @@ def test_web_api():
     print(f"  /api/command invalid -> 400: OK")
 
 test("Web API endpoints", test_web_api)
+
+def test_web_api_tune_valid():
+    ip = get_web_ip()
+    if not ip: return
+    for freq_khz in [9410, 15190, 17120]:
+        code, body = _curl("POST", f"http://{ip}/api/command", data=f"cmd=tune&value={freq_khz}", timeout=10)
+        assert code == 200, f"Tune {freq_khz} failed: {body}"
+        time.sleep(1)
+        s = get_status(ser)
+        assert s and abs(s["freq_khz"] - freq_khz) <= 2, f"Freq mismatch: {s}"
+    print(f"  Tuned 3 frequencies OK")
+
+def test_web_api_tune_out_of_band():
+    ip = get_web_ip()
+    if not ip: return
+    code, body = _curl("POST", f"http://{ip}/api/command", data="cmd=tune&value=0", timeout=10)
+    assert code == 400, f"Expected 400, got {code}"
+
+def test_web_api_volume():
+    ip = get_web_ip()
+    if not ip: return
+    for vol in [0, 30, 63]:
+        code, body = _curl("POST", f"http://{ip}/api/command", data=f"cmd=volume&value={vol}", timeout=10)
+        assert code == 200
+        time.sleep(0.5)
+        s = get_status(ser)
+        assert s and s["vol"] == vol, f"Vol mismatch: {s}"
+    print(f"  Volume 0/30/63 OK")
+
+def test_web_api_mute():
+    ip = get_web_ip()
+    if not ip: return
+    code, body = _curl("POST", f"http://{ip}/api/command", data="cmd=mute&value=true", timeout=10)
+    assert code == 200
+    time.sleep(0.3)
+    code, body = _curl("GET", f"http://{ip}/api/status", timeout=10)
+    assert '"main_muted":true' in body or '"muted":true' in body
+    code, body = _curl("POST", f"http://{ip}/api/command", data="cmd=mute&value=false", timeout=10)
+    assert code == 200
+    print(f"  Mute toggle OK")
+
+def test_web_api_band():
+    ip = get_web_ip()
+    if not ip: return
+    s = get_status(ser)
+    assert s
+    orig = s["band"]
+    code, body = _curl("POST", f"http://{ip}/api/command", data="cmd=band&value=next", timeout=10)
+    assert code == 200
+    time.sleep(1)
+    s = get_status(ser)
+    assert s and s["band"] != orig, f"Band unchanged: {s['band']}"
+    print(f"  Band cycle: {orig} -> {s['band']}")
+
+def test_web_api_seek():
+    ip = get_web_ip()
+    if not ip: return
+    code, body = _curl("POST", f"http://{ip}/api/command", data="cmd=seek&value=up", timeout=10)
+    assert code == 200
+    time.sleep(2)
+    s = get_status(ser)
+    assert s and s["freq_khz"] > 0
+    print(f"  Seek OK, freq={s['freq_khz']}")
+
+def test_web_api_invalid_cmd():
+    ip = get_web_ip()
+    if not ip: return
+    code, body = _curl("POST", f"http://{ip}/api/command", data="cmd=invalid_xyz", timeout=10)
+    assert code == 400
+
+def test_web_api_theme_get():
+    ip = get_web_ip()
+    if not ip: return
+    import json
+    code, body = _curl("GET", f"http://{ip}/api/theme", timeout=10)
+    assert code == 200
+    data = json.loads(body)
+    assert "idx" in data and "name" in data and "colors" in data
+    assert "bg" in data["colors"] and "fg" in data["colors"]
+    assert 0 <= data["idx"] < data["themeCount"]
+    print(f"  Theme API: idx={data['idx']} name={data['name']}")
+
+def test_web_api_theme_set():
+    ip = get_web_ip()
+    if not ip: return
+    import json
+    code, body = _curl("GET", f"http://{ip}/api/theme", timeout=10)
+    orig = json.loads(body)
+    new_idx = (orig["idx"] + 1) % orig["themeCount"]
+    code, body = _curl("POST", f"http://{ip}/api/theme", data=f"idx={new_idx}", timeout=10)
+    assert code == 200
+    code, body = _curl("GET", f"http://{ip}/api/theme", timeout=10)
+    assert json.loads(body)["idx"] == new_idx
+    _curl("POST", f"http://{ip}/api/theme", data=f"idx={orig['idx']}", timeout=10)
+    print(f"  Theme set: {orig['idx']}->{new_idx}->{orig['idx']}")
+
+def test_scan_auto():
+    code, body = send_cmd(ser, 'Z', wait=10)
+    assert "END" in body, f"Scan failed: {body}"
+    code, body = send_cmd(ser, '$', wait=1)
+    assert body, "No memory list"
+    count = sum(1 for line in body.split('\n') if line.startswith('#'))
+    print(f"  Scan found {count} signals")
+
+def test_scan_invalid():
+    ip = get_web_ip()
+    if not ip: return
+    code, body = _curl("POST", f"http://{ip}/api/scan", data="cmd=scan&mode=invalid", timeout=10)
+    assert code == 400
+
+def test_status_page():
+    ip = get_web_ip()
+    if not ip: return
+    code, body = _curl("GET", f"http://{ip}/", timeout=10)
+    assert code == 200
+    for keyword in ["ATS-Mini", "Status", "Controls", "Memory", "Scan", "Config",
+                    "Band", "Frequency", "Signal", "Battery"]:
+        assert keyword in body, f"Missing {keyword} on status page"
+
+def test_controls_page():
+    ip = get_web_ip()
+    if not ip: return
+    code, body = _curl("GET", f"http://{ip}/controls", timeout=10)
+    assert code == 200
+    for keyword in ["Volume", "Mute", "Squelch", "Seek", "Mode", "Brightness"]:
+        assert keyword in body, f"Missing {keyword} on controls page"
+
+def test_scan_page():
+    ip = get_web_ip()
+    if not ip: return
+    code, body = _curl("GET", f"http://{ip}/scan", timeout=10)
+    assert code == 200
+    for keyword in ["Scan to Memory", "Auto Scan", "Manual Scan", "Bookmark"]:
+        assert keyword in body, f"Missing {keyword} on scan page"
+
+def test_memory_page():
+    ip = get_web_ip()
+    if not ip: return
+    code, body = _curl("GET", f"http://{ip}/memory", timeout=10)
+    assert code == 200
+    assert "Memory" in body
+
+def test_theme_sync():
+    ip = get_web_ip()
+    if not ip: return
+    import json
+    code, body = _curl("GET", f"http://{ip}/api/theme", timeout=10)
+    data = json.loads(body)
+    orig_idx = data["idx"]
+    new_idx = (orig_idx + 1) % data["themeCount"]
+    _curl("POST", f"http://{ip}/api/theme", data=f"idx={new_idx}", timeout=10)
+    code, body = _curl("GET", f"http://{ip}/api/theme", timeout=10)
+    assert json.loads(body)["idx"] == new_idx
+    _curl("POST", f"http://{ip}/api/theme", data=f"idx={orig_idx}", timeout=10)
+    print(f"  Theme sync OK")
+
+# Web API expansion
+test("web_api_tune_valid", test_web_api_tune_valid)
+test("web_api_tune_out_of_band", test_web_api_tune_out_of_band)
+test("web_api_volume", test_web_api_volume)
+test("web_api_mute", test_web_api_mute)
+test("web_api_band", test_web_api_band)
+test("web_api_seek", test_web_api_seek)
+test("web_api_invalid_cmd", test_web_api_invalid_cmd)
+test("web_api_theme_get", test_web_api_theme_get)
+test("web_api_theme_set", test_web_api_theme_set)
+
+# Scan tests
+test("scan_auto", test_scan_auto)
+test("scan_invalid", test_scan_invalid)
+
+# HTML page tests
+test("status_page", test_status_page)
+test("controls_page", test_controls_page)
+test("scan_page", test_scan_page)
+test("memory_page", test_memory_page)
+
+# Theme sync
+test("theme_sync", test_theme_sync)
 
 
 # =====================================================================

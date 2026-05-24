@@ -39,6 +39,8 @@ static const String webUtcOffsetSelector();
 static const String webThemeSelector();
 static const String webRadioPage();
 static const String webMemoryPage();
+static const String webControlsPage();
+static const String webScanPage();
 
 // Helper: append a hex color field to JSON string
 static void jsonColor(String &json, const char *key, uint16_t color) {
@@ -69,6 +71,14 @@ void webInit()
 
   server.on("/memory", HTTP_ANY, [] (AsyncWebServerRequest *request) {
     request->send(200, "text/html", webMemoryPage());
+  });
+
+  server.on("/controls", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+    request->send(200, "text/html", webControlsPage());
+  });
+
+  server.on("/scan", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+    request->send(200, "text/html", webScanPage());
   });
 
   server.on("/config", HTTP_ANY, [] (AsyncWebServerRequest *request) {

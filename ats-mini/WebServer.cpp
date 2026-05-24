@@ -328,55 +328,80 @@ static const String webInputField(const String &name, const String &value, bool 
   );
 }
 
-static const String webStyleSheet()
-{
+static const String webStyleSheet() {
   return
-"BODY"
-"{"
-  "margin: 0;"
-  "padding: 0;"
+"BODY{margin:0;padding:0;background:var(--bg);color:var(--fg)}"
+"H1{text-align:center;color:var(--menu-hdr)}"
+"TABLE{width:100%;max-width:768px;border:0;margin:auto}"
+"TH,TD{padding:0.5em}"
+"TH.HEADING{background:var(--menu-hdr);color:var(--menu-hl-text);text-align:center}"
+"TD.LABEL{text-align:right;color:var(--param)}"
+"INPUT[type=text],INPUT[type=password],SELECT{"
+  "width:95%;padding:0.5em;"
+  "background:var(--input-bg);color:var(--input-text);border:1px solid var(--input-border)"
 "}"
-"H1"
-"{"
-  "text-align: center;"
+"INPUT[type=submit],BUTTON{"
+  "padding:0.5em 1em;"
+  "background:var(--button-bg);color:var(--button-text);border:1px solid var(--menu-border);cursor:pointer"
 "}"
-"TABLE"
-"{"
-  "width: 100%;"
-  "max-width: 768px;"
-  "border: 0px;"
-  "margin-left: auto;"
-  "margin-right: auto;"
-"}"
-"TH, TD"
-"{"
-  "padding: 0.5em;"
-"}"
-"TH.HEADING"
-"{"
-  "background-color: #80A0FF;"
-  "column-span: all;"
-  "text-align: center;"
-"}"
-"TD.LABEL"
-"{"
-  "text-align: right;"
-"}"
-"INPUT[type=text], INPUT[type=password], SELECT"
-"{"
-  "width: 95%;"
-  "padding: 0.5em;"
-"}"
-"INPUT[type=submit]"
-"{"
-  "width: 50%;"
-  "padding: 0.5em 0;"
-"}"
-".CENTER"
-"{"
-  "text-align: center;"
+".CENTER{text-align:center}"
+"NAV{text-align:center;padding:0.5em;background:var(--nav-bg);border-bottom:1px solid var(--menu-border)}"
+"NAV A{color:var(--nav-text);text-decoration:none;margin:0 0.5em}"
+"NAV A:hover{color:var(--menu-hl-text)}"
+".SLIDER{width:80%}"
+"@media(max-width:480px){"
+  "INPUT[type=text],SELECT{width:98%}"
+  ".SLIDER{width:100%}"
+  "BUTTON{width:100%;margin:0.2em 0}"
+  "TD.LABEL{white-space:nowrap;font-size:0.9em}"
 "}"
 ;
+}
+
+static const String webThemeVars() {
+  char buf[600];
+  snprintf(buf, sizeof(buf),
+    "<STYLE>:root{"
+    "--bg:#%04X;--fg:#%04X;"
+    "--menu-bg:#%04X;--menu-border:#%04X;"
+    "--menu-item:#%04X;--menu-hdr:#%04X;"
+    "--menu-hl-bg:#%04X;--menu-hl-text:#%04X;"
+    "--param:#%04X;"
+    "--box-bg:#%04X;--box-border:#%04X;--box-text:#%04X;"
+    "--box-off-bg:#%04X;--box-off-text:#%04X;"
+    "--scan-rssi:#%04X;--scan-snr:#%04X;"
+    "--s-meter:#%04X;"
+    "--nav-bg:#%04X;--nav-text:#%04X;"
+    "--input-bg:#%04X;--input-border:#%04X;"
+    "--input-text:#%04X;"
+    "--button-bg:#%04X;--button-text:#%04X;"
+    "}</STYLE>",
+    TH.bg, TH.text,
+    TH.menu_bg, TH.menu_border,
+    TH.menu_item, TH.menu_hdr,
+    TH.menu_hl_bg, TH.menu_hl_text,
+    TH.menu_param,
+    TH.box_bg, TH.box_border, TH.box_text,
+    TH.box_off_bg, TH.box_off_text,
+    TH.scan_rssi, TH.scan_snr,
+    TH.smeter_bar,
+    TH.menu_bg, TH.menu_item,
+    TH.menu_bg, TH.menu_border,
+    TH.text,
+    TH.menu_hl_bg, TH.menu_hl_text
+  );
+  return String(buf);
+}
+
+static const String webNav() {
+  return
+"<NAV>"
+"<A HREF='/'>Status</A>"
+"<A HREF='/controls'>Controls</A>"
+"<A HREF='/memory'>Memory</A>"
+"<A HREF='/scan'>Scan</A>"
+"<A HREF='/config'>Config</A>"
+"</NAV>";
 }
 
 static const String webPage(const String &body, int refreshSec)
@@ -393,8 +418,9 @@ static const String webPage(const String &body, int refreshSec)
   "<TITLE>ATS-Mini Config</TITLE>"
   + refresh +
   "<STYLE>" + webStyleSheet() + "</STYLE>"
+  + webThemeVars() +
 "</HEAD>"
-"<BODY STYLE='font-family: sans-serif;'>" + body + "</BODY>"
+"<BODY STYLE='font-family: sans-serif;'>" + webNav() + body + "</BODY>"
 "</HTML>"
 ;
 }
@@ -459,9 +485,6 @@ static const String webRadioPage()
 
   return webPage(
 "<H1>ATS-Mini Pocket Receiver</H1>"
-"<P ALIGN='CENTER'>"
-  "<A HREF='/memory'>Memory</A>&nbsp;|&nbsp;<A HREF='/config'>Config</A>"
-"</P>"
 "<TABLE COLUMNS=2>"
 "<TR>"
   "<TD CLASS='LABEL'>IP Address</TD>"
@@ -528,9 +551,6 @@ static const String webMemoryPage()
 
   return webPage(
 "<H1>ATS-Mini Pocket Receiver Memory</H1>"
-"<P ALIGN='CENTER'>"
-  "<A HREF='/'>Status</A>&nbsp;|&nbsp;<A HREF='/config'>Config</A>"
-"</P>"
 "<TABLE COLUMNS=2>" + items + "</TABLE>"
 );
 }
@@ -549,10 +569,6 @@ const String webConfigPage()
 
   return webPage(
 "<H1>ATS-Mini Config</H1>"
-"<P ALIGN='CENTER'>"
-  "<A HREF='/'>Status</A>"
-  "&nbsp;|&nbsp;<A HREF='/memory'>Memory</A>"
-"</P>"
 "<FORM ACTION='/setconfig' METHOD='POST'>"
   "<TABLE COLUMNS=2>"
   "<TR><TH COLSPAN=2 CLASS='HEADING'>WiFi Network 1</TH></TR>"

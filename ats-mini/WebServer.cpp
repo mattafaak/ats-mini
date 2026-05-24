@@ -904,13 +904,14 @@ static const String webMemoryPage()
 
     if(!memories[j].freq)
       items += "&nbsp;---&nbsp;</TD></TR>";
-    else
-    {
-      String freq = memories[j].mode == FM?
-        String(memories[j].freq / 1000000.0) + "MHz "
-      : String(memories[j].freq / 1000.0) + "kHz ";
-      String memName = memories[j].name[0] ? " - " + String(memories[j].name) : "";
-      items += freq + memName + " " + String(bandModeDesc[memories[j].mode]) + "</TD></TR>";
+    else {
+      String freq;
+      if (memories[j].mode == FM)
+        freq = String((float)memories[j].freq / 1000000.0, 1) + " MHz";
+      else
+        freq = String(memories[j].freq / 1000) + " kHz";
+      if (memories[j].name[0]) freq += " - " + String(memories[j].name);
+      items += freq + " " + String(bandModeDesc[memories[j].mode]) + "</TD></TR>";
     }
   }
 

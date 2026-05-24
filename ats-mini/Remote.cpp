@@ -7,6 +7,7 @@
 #include "Draw.h"
 #include "Remote.h"
 #include "Tuning.h"
+#include "AudioManager.h"
 
 static RemoteState remoteSerialState;
 
@@ -347,6 +348,51 @@ void remoteTickTime(Stream* stream, RemoteState* state)
 }
 
 //
+// Scan current band and output frequency activity to serial
+//
+static void scanToSerial(Stream* stream)
+{
+  Band *band = getCurrentBand();
+  uint16_t step = getCurrentStep()->step;
+  if (radioState.mode != FM && step < 5) step = 5;
+
+  audioTempMute(true);
+  uint16_t origFreq = radioState.frequency;
+  int origBfo = radioState.bfo;
+  uint16_t freq = band->minimumFreq;
+  int count = 0;
+
+  stream->println("Scanning...");
+
+  while (freq <= band->maximumFreq)
+  {
+    if (isSSB()) updateBFO(0, true);
+    if (updateFrequency(freq, false))
+    {
+      delay(80);
+      rx.getCurrentReceivedSignalQuality();
+      uint8_t rssi = rx.getCurrentRSSI();
+      uint8_t snr = rx.getCurrentSNR();
+      stream->printf("%u,%u,%u\r\n", freq, rssi, snr);
+      if (rssi > 0) count++;
+    }
+
+    if (consumeAbortPending())
+    {
+      stream->println("ABORTED");
+      break;
+    }
+    freq += step;
+  }
+
+  stream->printf("END,%d\r\n", count);
+
+  updateFrequency(origFreq, false);
+  if (isSSB()) updateBFO(origBfo, false);
+  audioTempMute(false);
+}
+
+//
 // Recognize and execute given remote command
 //
 int remoteDoCommand(Stream* stream, RemoteState* state, char key)
@@ -446,6 +492,20 @@ int remoteDoCommand(Stream* stream, RemoteState* state, char key)
     case 't':
       state->remoteLogOn = !state->remoteLogOn;
       break;
+    case '?': {
+      RemoteState temp = {};
+      remotePrintStatus(stream, &temp);
+      break;
+    }
+    case '>':  // Seek up
+      doSeek(1, 1);
+      break;
+    case '<':  // Seek down
+      doSeek(-1, -1);
+      break;
+    case 'Z':  // Frequency activity scan to serial
+      scanToSerial(stream);
+      break;
 
     case '$':
       remoteGetMemories(stream);
@@ -458,6 +518,36 @@ int remoteDoCommand(Stream* stream, RemoteState* state, char key)
       if (remoteSetFrequency(stream))
         event |= REMOTE_PREFS;
       break;
+    case 'K': {
+      stream->print('K');
+      long int freqKhz = remoteReadInteger(stream);
+      if (freqKhz <= 0) break;
+      if (!expectNewline(stream)) {
+        remoteShowError(stream, "Expected newline");
+        break;
+      }
+      stream->println();
+      long int freqHz = freqKhz * 1000;
+      Band *band = getCurrentBand();
+      uint16_t targetFreq = freqFromHz(freqHz, radioState.mode);
+      int targetBfo = isSSB() ? bfoFromHz(freqHz) : 0;
+      if (!isFreqInBand(band, targetFreq) || (isSSB() && targetFreq == band->maximumFreq && targetBfo)) {
+        remoteShowError(stream, "Frequency is out of range for the current band");
+        break;
+      }
+      if (!updateFrequency(targetFreq, false)) {
+        remoteShowError(stream, "Frequency is out of range for the current band");
+        break;
+      }
+      if (isSSB())
+        updateBFO(targetBfo, false);
+      else if (radioState.bfo)
+        updateBFO(0, true);
+      clearStationInfo();
+      identifyFrequency(getEffectiveFreq());
+      event |= REMOTE_PREFS;
+      break;
+    }
 
     case 'T':
       stream->println(switchThemeEditor(!switchThemeEditor()) ? "Theme editor enabled" : "Theme editor disabled");

@@ -7,6 +7,9 @@
 #include "Utils.h"
 #include "Menu.h"
 #include "Draw.h"
+#include "Station.h"
+#include "Tuning.h"
+#include "AudioManager.h"
 
 #include <WiFi.h>
 #include <AsyncTCP.h>
@@ -74,6 +77,107 @@ void webInit()
 
   // This method saves configuration form contents
   server.on("/setconfig", HTTP_ANY, webSetConfig);
+
+  // JSON status API
+  server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    int cal = (radioState.mode == USB) ? getCurrentBand()->usbCal :
+              (radioState.mode == LSB) ? getCurrentBand()->lsbCal : 0;
+    int8_t ws = getWiFiStatus();
+    String wifiStatusStr = (ws == 2) ? "station" :
+                           (ws == 1) ? "ap" :
+                           (ws == 0) ? "disabled" : "disconnected";
+    String json = "{";
+    json += "\"firmware\":" + String(VER_APP) + ",";
+    json += "\"frequency_khz\":" + String(getEffectiveFreq()) + ",";
+    json += "\"bfo\":" + String(radioState.bfo) + ",";
+    json += "\"cal\":" + String(cal) + ",";
+    json += "\"band\":\"" + String(getCurrentBand()->bandName) + "\",";
+    json += "\"mode\":\"" + String(bandModeDesc[radioState.mode]) + "\",";
+    json += "\"step\":\"" + String(getCurrentStep()->desc) + "\",";
+    json += "\"bandwidth\":\"" + String(getCurrentBandwidth()->desc) + "\",";
+    json += "\"volume\":" + String(radioState.vol) + ",";
+    json += "\"agc_index\":" + String(radioState.agcIndex) + ",";
+    json += "\"rssi_dBuv\":" + String(radioState.rssi) + ",";
+    json += "\"snr_dB\":" + String(radioState.snr) + ",";
+    json += "\"battery_V\":" + String(batteryMonitor()) + ",";
+    json += String("\"muted\":") + (audioIsMuted() ? "true" : "false") + ",";
+    json += String("\"squelch_enabled\":") + (audioIsSquelched() ? "true" : "false") + ",";
+    json += String("\"sleep\":") + (sleepOn() ? "true" : "false") + ",";
+    json += "\"wifi_mode\":\"" + wifiStatusStr + "\",";
+    json += "\"wifi_rssi\":" + String(ws == 2 ? WiFi.RSSI() : 0) + ",";
+    json += "\"ip_address\":\"" + String(getWiFiIPAddress()) + "\"";
+    json += "}";
+    request->send(200, "application/json", json);
+  });
+
+  // Remote control API
+  server.on("/api/command", HTTP_POST, [](AsyncWebServerRequest *request) {
+    String cmd = request->arg("cmd");
+    String value = request->arg("value");
+
+    if (cmd == "tune") {
+      long int freqKhz = value.toInt();
+      if (freqKhz <= 0) {
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Bad frequency\"}");
+        return;
+      }
+      long int freqHz = freqKhz * 1000;
+      Band *band = getCurrentBand();
+      uint16_t targetFreq = freqFromHz(freqHz, radioState.mode);
+      int targetBfo = isSSB() ? bfoFromHz(freqHz) : 0;
+      if (!isFreqInBand(band, targetFreq)) {
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Out of band\"}");
+        return;
+      }
+      if (!updateFrequency(targetFreq, false)) {
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Out of band\"}");
+        return;
+      }
+      if (isSSB())
+        updateBFO(targetBfo, false);
+      else if (radioState.bfo)
+        updateBFO(0, true);
+      clearStationInfo();
+      identifyFrequency(getEffectiveFreq());
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    if (cmd == "volume") {
+      int v = value.toInt();
+      if (v < 0) v = 0;
+      if (v > 63) v = 63;
+      radioState.vol = v;
+      rx.setVolume(radioState.vol);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    if (cmd == "mute") {
+      audioMuteMain(value == "true" || value == "1");
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    if (cmd == "band") {
+      if (value == "next") doBand(1);
+      else if (value == "prev") doBand(-1);
+      else {
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Use next/prev\"}");
+        return;
+      }
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    if (cmd == "sleep") {
+      sleepOn(value == "on" || value == "true" || value == "1");
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Unknown cmd\"}");
+  });
 
   // Start web server
   server.begin();

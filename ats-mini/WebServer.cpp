@@ -201,6 +201,135 @@ void webInit()
       return;
     }
 
+    // --- seek ---
+    if (cmd == "seek") {
+      if (value == "up") doSeek(1, 1);
+      else if (value == "down") doSeek(-1, -1);
+      else { request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Use up/down\"}"); return; }
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- mode: 0=FM, 1=AM, 2=LSB, 3=USB ---
+    if (cmd == "mode") {
+      int idx = value.toInt();
+      if (idx < 0 || idx > 3) { request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Bad mode\"}"); return; }
+      doMode(idx - radioState.mode);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- bandwidth: index delta from current ---
+    if (cmd == "bandwidth") {
+      int idx = value.toInt();
+      doBandwidth(idx - getCurrentBand()->bandwidthIdx);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- step: index delta from current ---
+    if (cmd == "step") {
+      int idx = value.toInt();
+      doStep(idx - getCurrentBand()->currentStepIdx);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- squelch: direct value 0-127, preserves bit 7 (RSSI/SNR toggle) ---
+    if (cmd == "squelch") {
+      int v = constrain(value.toInt(), 0, 127);
+      uint8_t s = radioState.squelch[radioState.mode];
+      radioState.squelch[radioState.mode] = (s & 0x80) | v;
+      audioSquelchClose(v > 0 && v >= radioState.rssi);
+      prefsRequestSave(SAVE_SETTINGS);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- squelch_param: toggle RSSI/SNR bit ---
+    if (cmd == "squelch_param") {
+      uint8_t s = radioState.squelch[radioState.mode];
+      if (value == "snr") radioState.squelch[radioState.mode] = s | 0x80;
+      else radioState.squelch[radioState.mode] = s & ~0x80;
+      prefsRequestSave(SAVE_SETTINGS);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- agc: direct value 0-37 ---
+    if (cmd == "agc") {
+      int v = constrain(value.toInt(), 0, 37);
+      doAgc(v - radioState.agcIndex);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- avc: direct value 0-90 ---
+    if (cmd == "avc") {
+      int v = constrain(value.toInt(), 0, 90);
+      int cur = (radioState.mode == USB || radioState.mode == LSB) ? radioState.ssbAvcIdx : radioState.amAvcIdx;
+      doAvc(v - cur);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- cal: +/-1 ---
+    if (cmd == "cal") {
+      int dir = value.toInt();
+      if (dir != 1 && dir != -1) { request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Use 1 or -1\"}"); return; }
+      doCal(dir);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- brightness: direct value 10-255 ---
+    if (cmd == "brightness") {
+      int v = constrain(value.toInt(), 10, 255);
+      while (radioState.brightness != v) doBrt(radioState.brightness < v ? 1 : -1);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- softmute: direct value 0-32 ---
+    if (cmd == "softmute") {
+      int v = constrain(value.toInt(), 0, 32);
+      doSoftMute(v - radioState.softMuteMaxAtt);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- fm_region: index ---
+    if (cmd == "fm_region") {
+      int idx = constrain(value.toInt(), 0, getTotalFmRegions() - 1);
+      doFmRegion(idx - radioState.fmRegionIdx);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- rds: mode bitmask ---
+    if (cmd == "rds") {
+      radioState.rdsMode = constrain(value.toInt(), 0, 63);
+      prefsRequestSave(SAVE_SETTINGS);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- zoom: toggle ---
+    if (cmd == "zoom") {
+      radioState.zoomLevel = (value == "on" || value == "true" || value == "1") ? 1 : 0;
+      prefsRequestSave(SAVE_SETTINGS);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
+    // --- scroll: normal/reverse ---
+    if (cmd == "scroll") {
+      radioState.scrollDir = (value == "reverse") ? -1 : 1;
+      prefsRequestSave(SAVE_SETTINGS);
+      request->send(200, "application/json", "{\"status\":\"ok\"}");
+      return;
+    }
+
     request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Unknown cmd\"}");
   });
 
@@ -563,7 +692,7 @@ static const String webControlsPage()
   "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=volume&value='+this.value})\"> "
   "<SPAN>" + String(radioState.vol) + "</SPAN>"
   "<BR>"
-  "<BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=mute&value='+(b.textContent=='Mute'));b.textContent=b.textContent=='Mute'?'Unmute':'Mute'\">Mute</BUTTON>"
+  "<BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=mute&value='+(b.textContent=='Mute')});b.textContent=b.textContent=='Mute'?'Unmute':'Mute'\">Mute</BUTTON>"
   "<BR>Squelch: <INPUT TYPE='range' MIN='0' MAX='127' VALUE='0' CLASS='SLIDER' "
   "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=squelch&value='+this.value})\">"
   "<BR><BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=rssi'})\">RSSI</BUTTON> "
@@ -598,14 +727,14 @@ static const String webControlsPage()
   "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=cal&value=1'})\">+</BUTTON>"
   "<BR>Brightness: <INPUT TYPE='range' MIN='10' MAX='255' VALUE='" + String(radioState.brightness) + "' CLASS='SLIDER' "
   "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=brightness&value='+this.value})\">"
-  "<BR><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=sleep&value='+(b.textContent=='Sleep'));b.textContent=b.textContent=='Sleep'?'Wake':'Sleep'\">Sleep</BUTTON>"
+  "<BR><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=sleep&value='+(b.textContent=='Sleep')});b.textContent=b.textContent=='Sleep'?'Wake':'Sleep'\">Sleep</BUTTON>"
   "<BR>FM Region: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=fm_region&value='+this.value})\">"
     "<OPTION VALUE='0'>USA</OPTION><OPTION VALUE='1'>Europe</OPTION><OPTION VALUE='2'>Japan</OPTION>"
   "</SELECT>"
   "<BR>RDS: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=rds&value='+this.value})\">"
     "<OPTION VALUE='0'>Off</OPTION><OPTION VALUE='1'>PS</OPTION><OPTION VALUE='7'>PS+PI+CT</OPTION>"
   "</SELECT>"
-  "<BR><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=zoom&value='+(b.textContent=='Zoom'));b.textContent=b.textContent=='Zoom'?'Normal':'Zoom'\">Zoom</BUTTON>"
+  "<BR><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=zoom&value='+(b.textContent=='Zoom')});b.textContent=b.textContent=='Zoom'?'Normal':'Zoom'\">Zoom</BUTTON>"
   "<BR><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=scroll&value='+(b.textContent=='Normal'?'reverse':'normal')});b.textContent=b.textContent=='Normal'?'Reverse':'Normal'\">Normal</BUTTON>"
 "</TD></TR>"
 

@@ -50,6 +50,10 @@ bool drawWiFiStatus(const char *statusLine1, const char *statusLine2, int x, int
 void drawRadioText(int y, int ymax);
 void drawScale(uint32_t freq);
 
+// Draw the common top bar: save/BLE/battery/WiFi indicators, band/mode,
+// frequency, and station name. Used by all layout implementations.
+void drawTopBar();
+
 void drawLayoutDefault(const char *statusLine1, const char *statusLine2);
 void drawLayoutSmeter(const char *statusLine1, const char *statusLine2);
 

@@ -153,54 +153,13 @@ static void drawLargeSNMeter(int snr, int x, int y)
 //
 void drawLayoutSmeter(const char *statusLine1, const char *statusLine2)
 {
-  // Draw preferences write request icon
-  drawSaveIndicator(SAVE_OFFSET_X, SAVE_OFFSET_Y);
-
-  // Draw BLE icon
-  drawBleIndicator(BLE_OFFSET_X, BLE_OFFSET_Y);
-
-  // Draw battery indicator & voltage
-  bool has_voltage = drawBattery(BATT_OFFSET_X, BATT_OFFSET_Y);
-
-  // Draw WiFi icon
-  drawWiFiIndicator(has_voltage ? WIFI_OFFSET_X : BATT_OFFSET_X - 13, WIFI_OFFSET_Y);
-
-  // Set font we are going to use
-  spr.setFreeFont(&Orbitron_Light_24);
-
-  // Draw band and mode
-  drawBandAndMode(
-    getCurrentBand()->bandName,
-    bandModeDesc[radioState.mode],
-    BAND_OFFSET_X, BAND_OFFSET_Y
-  );
-
-  if(switchThemeEditor())
-  {
-    spr.setTextDatum(TR_DATUM);
-    spr.setTextColor(TH.text_warn);
-    spr.drawString(TH.name, 319, BATT_OFFSET_Y + 17, 2);
-  }
-
-  // Draw frequency, units, and optionally highlight a digit
-  drawFrequency(
-    radioState.frequency,
-    FREQ_OFFSET_X, FREQ_OFFSET_Y,
-    FUNIT_OFFSET_X, FUNIT_OFFSET_Y,
-    radioState.cmd == CMD_FREQ ? getFreqInputPos() + (radioState.pnr ? 0x80 : 0) : 100
-  );
-
-  // Show station or channel name, if present
-  if(*getStationName() == 0xFF)
-    drawLongStationName(getStationName() + 1, MENU_OFFSET_X + 1 + 76 + MENU_DELTA_X + 2, RDS_OFFSET_Y);
-  else if(*getStationName())
-    drawStationName(getStationName(), RDS_OFFSET_X, RDS_OFFSET_Y);
+  // Draw common top bar
+  drawTopBar();
 
   // Draw band scale
   drawSmallScale(isSSB() ? getEffectiveFreq() : radioState.frequency, 120);
 
   // Draw left-side menu/info bar
-  // @@@ FIXME: Frequency display (above) intersects the side bar!
   drawSideBar(radioState.cmd, ALT_MENU_OFFSET_X, ALT_MENU_OFFSET_Y, MENU_DELTA_X);
 
   // Indicate FM pilot detection (stereo indicator)

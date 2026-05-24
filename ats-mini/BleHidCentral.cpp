@@ -245,8 +245,6 @@ void BleHidCentral::onScanStart()
   }
   else
     drawScreen("Scanning for BLE HID...");
-
-  delay(500);
 }
 
 bool BleHidCentral::acceptsAdvertisement(BLEAdvertisedDevice& device)

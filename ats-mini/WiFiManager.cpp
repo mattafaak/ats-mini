@@ -211,7 +211,7 @@ static bool wifiConnect()
     }
 
     if((wifiStatus!=WL_CONNECTED) && ((millis() - start)<WIFI_MULTI_TOTAL_TIMEOUT))
-      delay(1000);
+      delay(100);
   }
 
   // If failed connecting to WiFi network...

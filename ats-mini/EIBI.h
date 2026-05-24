@@ -25,4 +25,9 @@ const StationSchedule *eibiPrev(uint16_t freq, uint8_t hour, uint8_t minute, siz
 const StationSchedule *eibiNext(uint16_t freq, uint8_t hour, uint8_t minute, size_t *offset);
 const StationSchedule *eibiAtSameFreq(uint8_t hour, uint8_t minute, size_t *offset, bool same);
 
+// High-level lookup that owns offset tracking internally.
+// Returns station name for the given frequency and time, or NULL.
+// Handles periodic re-check via internal static state.
+const char *eibiFindName(uint16_t freq, uint8_t hour, uint8_t minute, bool periodic);
+
 #endif // EIBI_H

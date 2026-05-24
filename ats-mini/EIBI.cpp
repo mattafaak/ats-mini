@@ -66,10 +66,17 @@ const BandLabel bandLabels[] =
   {29600, 30000,  "9m BC"         }
 };
 
-// FIXME: this might be slow
+static bool eibiFileChecked = false;
+static bool eibiFileExists = false;
+
 bool eibiAvailable()
 {
-  return(LittleFS.exists(EIBI_PATH));
+  if(!eibiFileChecked)
+  {
+    eibiFileExists = LittleFS.exists(EIBI_PATH);
+    eibiFileChecked = true;
+  }
+  return(eibiFileExists);
 }
 
 static bool entryIsNow(const StationSchedule *entry, int now)
@@ -385,6 +392,38 @@ static bool eibiParseLine(const char *line, StationSchedule &entry)
   return(true);
 }
 
+const char *eibiFindName(uint16_t freq, uint8_t hour, uint8_t minute, bool periodic)
+{
+  static uint16_t lastFreq = 0;
+  static uint8_t lastMinute = 255;
+  static size_t firstOffset = (size_t)-1;
+  static size_t lastOffset = (size_t)-1;
+  const StationSchedule *entry = NULL;
+
+  // Periodic re-check of the same frequency
+  if(periodic && freq == lastFreq && lastOffset != (size_t)-1)
+  {
+    entry = eibiAtSameFreq(hour, minute, &lastOffset, false);
+    if(!entry)
+    {
+      lastOffset = firstOffset;
+      entry = eibiAtSameFreq(hour, minute, &lastOffset, true);
+    }
+  }
+
+  // New lookup if needed
+  if(!periodic || (!entry && lastOffset != (size_t)-1) || lastMinute != minute)
+  {
+    lastFreq = freq;
+    lastMinute = minute;
+    lastOffset = (size_t)-1;
+    entry = eibiLookup(freq, hour, minute, &lastOffset);
+    firstOffset = lastOffset = entry ? lastOffset : (size_t)-1;
+  }
+
+  return(entry ? entry->name : NULL);
+}
+
 bool eibiLoadSchedule()
 {
   static const char *eibiMessage = "Loading EiBi Schedule";
@@ -486,6 +525,7 @@ bool eibiLoadSchedule()
   // Move new schedule to its permanent place
   LittleFS.remove(EIBI_PATH);
   LittleFS.rename(TEMP_PATH, EIBI_PATH);
+  eibiFileChecked = false;  // Invalidate cache
 
   // Success
   identifyFrequency(getEffectiveFreq());

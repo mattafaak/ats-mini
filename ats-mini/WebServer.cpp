@@ -40,6 +40,13 @@ static const String webThemeSelector();
 static const String webRadioPage();
 static const String webMemoryPage();
 
+// Helper: append a hex color field to JSON string
+static void jsonColor(String &json, const char *key, uint16_t color) {
+  char buf[32];
+  snprintf(buf, sizeof(buf), "\"%s\":\"#%04X\",", key, color);
+  json += buf;
+}
+
 //
 // Initialize internal web server
 //
@@ -185,6 +192,46 @@ void webInit()
     }
 
     request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Unknown cmd\"}");
+  });
+
+  // Theme API — GET returns current theme JSON, POST changes theme by idx
+  server.on("/api/theme", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String json = "{";
+    json += "\"idx\":" + String(themeIdx) + ",";
+    json += "\"name\":\"" + String(TH.name) + "\",";
+    json += "\"themeCount\":" + String(getTotalThemes()) + ",";
+    json += "\"colors\":{";
+    jsonColor(json, "bg", TH.bg);
+    jsonColor(json, "fg", TH.text);
+    jsonColor(json, "menu_bg", TH.menu_bg);
+    jsonColor(json, "menu_border", TH.menu_border);
+    jsonColor(json, "menu_item", TH.menu_item);
+    jsonColor(json, "menu_hdr", TH.menu_hdr);
+    jsonColor(json, "menu_hl_bg", TH.menu_hl_bg);
+    jsonColor(json, "menu_hl_text", TH.menu_hl_text);
+    jsonColor(json, "param", TH.menu_param);
+    jsonColor(json, "box_bg", TH.box_bg);
+    jsonColor(json, "box_border", TH.box_border);
+    jsonColor(json, "box_text", TH.box_text);
+    jsonColor(json, "box_off_bg", TH.box_off_bg);
+    jsonColor(json, "box_off_text", TH.box_off_text);
+    jsonColor(json, "scan_rssi", TH.scan_rssi);
+    jsonColor(json, "scan_snr", TH.scan_snr);
+    jsonColor(json, "s_meter", TH.smeter_bar);
+    json.remove(json.length() - 1); // trailing comma
+    json += "}}";
+    request->send(200, "application/json", json);
+  });
+
+  server.on("/api/theme", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if(loginUsername != "" && loginPassword != "")
+      if(!request->authenticate(loginUsername.c_str(), loginPassword.c_str()))
+        return request->requestAuthentication();
+    if(request->hasParam("idx")) {
+      themeIdx = constrain(request->getParam("idx")->value().toInt(), 0, getTotalThemes() - 1);
+      prefsRequestSave(SAVE_SETTINGS, true);
+    }
+    request->send(200, "application/json", "{\"status\":\"ok\"}");
   });
 
   // Start web server

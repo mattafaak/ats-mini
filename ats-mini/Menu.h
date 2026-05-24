@@ -154,5 +154,6 @@ void doCal(int16_t enc);
 void doStep(int16_t enc);
 void doMode(int16_t enc);
 void doBand(int16_t enc);
+uint8_t doAbout(int16_t enc);
 
 #endif // MENU_H

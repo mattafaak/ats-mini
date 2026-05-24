@@ -2,6 +2,7 @@
 #include "WiFiManager.h"
 #include "Draw.h"
 #include "Storage.h"
+#include "Tuning.h"
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <ESPmDNS.h>

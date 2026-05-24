@@ -4,6 +4,7 @@
 #include "Menu.h"
 #include "Draw.h"
 #include "Remote.h"
+#include "Tuning.h"
 
 static RemoteState remoteSerialState;
 

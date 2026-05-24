@@ -9,6 +9,7 @@
 #include "Menu.h"
 #include "MenuDraw.h"
 #include "DisplayController.h"
+#include "Tuning.h"
 
 //
 // Bands Menu

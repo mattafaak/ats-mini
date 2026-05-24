@@ -236,14 +236,6 @@ extern const int CALMax;
 
 static inline bool isSSB() { return(radioState.mode>FM && radioState.mode<AM); }
 
-void useBand(const Band *band);
-bool updateFrequency(int newFreq, bool wrap = true);
-bool updateBFO(int newBFO, bool wrap = true);
-bool doSeek(int16_t enc);
-bool clickFreq(bool shortPress);
-uint8_t doAbout(int16_t enc);
-bool consumeAbortPending();
-
 // Battery.c
 float batteryMonitor();
 bool drawBattery(int x, int y);

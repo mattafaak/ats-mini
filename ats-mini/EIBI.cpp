@@ -10,6 +10,7 @@
 
 #include <ctype.h>
 #include <string.h>
+#include "Tuning.h"
 
 #define EIBI_PATH "/schedules.bin"
 #define TEMP_PATH "/schedules.tmp"

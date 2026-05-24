@@ -2,6 +2,7 @@
 #include "Utils.h"
 #include "AudioManager.h"
 #include "Menu.h"
+#include "Tuning.h"
 
 // Tuning delays after rx.setFrequency()
 #define TUNE_DELAY_DEFAULT 30

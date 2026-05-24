@@ -8,10 +8,8 @@
 #include "Storage.h"
 #include "EventHandler.h"
 
-// Functions defined in ats-mini.ino
-bool doTune(int16_t enc);
-bool doDigit(int16_t enc);
-bool doSeek(int16_t enc, int16_t enca);
+// Tuning functions
+#include "Tuning.h"
 
 // External variables defined in ats-mini.ino
 extern volatile int16_t encoderCount;

@@ -285,7 +285,7 @@ void webInit()
     // --- brightness: direct value 10-255 ---
     if (cmd == "brightness") {
       int v = constrain(value.toInt(), 10, 255);
-      while (radioState.brightness != v) doBrt(radioState.brightness < v ? 1 : -1);
+      doBrt(v - radioState.brightness);
       request->send(200, "application/json", "{\"status\":\"ok\"}");
       return;
     }
@@ -562,6 +562,11 @@ static const String webPage(const String &body, int refreshSec)
 "<BODY STYLE='font-family: sans-serif;'>" + webNav() + body + "</BODY>"
 "</HTML>"
 ;
+}
+
+static const String webScanPage()
+{
+  return webPage("<H1>Scan to Memory</H1><P>Scan page loading...</P>", 5);
 }
 
 static const String webUtcOffsetSelector()

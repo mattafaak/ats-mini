@@ -62,6 +62,7 @@ struct SavedBand
 {
   uint8_t bandMode;       // Band mode (FM, AM, LSB, or USB)
   uint16_t currentFreq;   // Current frequency
+  int16_t currentBfo;     // Current BFO offset (Hz)
   int8_t currentStepIdx;  // Current frequency step
   int8_t bandwidthIdx;    // Index of the table bandwidthFM, bandwidthAM or bandwidthSSB;
   int16_t usbCal;         // USB calibration value
@@ -79,6 +80,7 @@ void prefsSaveBand(uint8_t idx, bool openPrefs)
   // Compose preference name and value
   snprintf(name, sizeof(name), "Band-%d", idx);
   value.currentFreq    = bands[idx].currentFreq;     // Frequency
+  value.currentBfo     = bands[idx].currentBfo;      // BFO offset
   value.bandMode       = bands[idx].bandMode;        // Modulation
   value.currentStepIdx = bands[idx].currentStepIdx;  // Step
   value.bandwidthIdx   = bands[idx].bandwidthIdx;    // Bandwidth
@@ -94,7 +96,7 @@ void prefsSaveBand(uint8_t idx, bool openPrefs)
 
 bool prefsLoadBand(uint8_t idx, bool openPrefs)
 {
-  SavedBand value;
+  SavedBand value = {};
   char name[32];
 
   // Will be loading from bands
@@ -108,6 +110,7 @@ bool prefsLoadBand(uint8_t idx, bool openPrefs)
   if(result)
   {
     bands[idx].currentFreq    = value.currentFreq;    // Frequency
+    bands[idx].currentBfo     = value.currentBfo;     // BFO offset
     bands[idx].bandMode       = value.bandMode;       // Modulation
     bands[idx].currentStepIdx = value.currentStepIdx; // Step
     bands[idx].bandwidthIdx   = value.bandwidthIdx;   // Bandwidth
@@ -258,7 +261,7 @@ bool prefsLoad(uint32_t items)
 
     // Load main global settings
     radioState.vol         = prefs.getUChar("Volume", radioState.vol);          // Current radioState.vol
-    bandIdx        = prefs.getUChar("Band", bandIdx);           // Current band
+    bandIdx        = constrain(prefs.getUChar("Band", bandIdx), 0, getTotalBands() - 1);
     radioState.wifiMode    = prefs.getUChar("WiFiMode", radioState.wifiMode);   // WiFi connection mode
     radioState.brightness     = prefs.getUShort("Brightness", radioState.brightness); // Brightness
     radioState.fmAgcIdx       = prefs.getUChar("FmAGC", radioState.fmAgcIdx);         // FM AGC/ATTN

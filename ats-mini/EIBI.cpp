@@ -461,6 +461,7 @@ bool eibiLoadSchedule()
   WiFiClient *stream = http.getStreamPtr();
   int totalLen = http.getSize();
   int byteCnt, lineCnt, charCnt;
+  bool writeFailed = false;
   char charBuf[200];
 
   for(byteCnt = charCnt = lineCnt = 0 ; http.connected() && (totalLen<0 || byteCnt<totalLen) ; )
@@ -502,7 +503,10 @@ bool eibiLoadSchedule()
           if(eibiParseLine(p, entry))
           {
             // Write it to the output file
-            file.write((uint8_t*)&entry, sizeof(entry));
+            if (file.write((uint8_t*)&entry, sizeof(entry)) != sizeof(entry)) {
+              writeFailed = true;
+              break;
+            }
             lineCnt++;
 
             if(!(lineCnt & 31))
@@ -524,6 +528,14 @@ bool eibiLoadSchedule()
   // Done with file and HTTP connection
   file.close();
   http.end();
+
+  // If write failed mid-stream, discard the partial file
+  if (writeFailed) {
+    LittleFS.remove(TEMP_PATH);
+    eibiFileChecked = false;
+    drawScreen(eibiMessage, "ERROR: write failed");
+    return(false);
+  }
 
   // Move new schedule to its permanent place
   LittleFS.remove(EIBI_PATH);

@@ -58,8 +58,8 @@ bool runScheduler(uint32_t currentTime)
         lastBgMinute = m;
         needRedraw = true;
       }
+      background_timer = currentTime;
     }
-    background_timer = currentTime;
   }
 
   return needRedraw;

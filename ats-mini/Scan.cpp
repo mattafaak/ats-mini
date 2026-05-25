@@ -198,6 +198,7 @@ static bool scanTickTime()
 //
 void scanRun(uint16_t centerFreq, uint16_t step)
 {
+  if (scanState != WSCAN_OFF) return;
   // Set tuning delay
   rx.setMaxDelaySetFrequency(radioState.mode == FM ? TUNE_DELAY_FM : TUNE_DELAY_AM_SSB);
   // Mute the audio
@@ -284,6 +285,13 @@ void scanToMemoryAuto(uint8_t count) {
     for (int i = 0; i < MEMORY_COUNT; i++) {
       if (memories[i].freq == 0) { slot = i; break; }
     }
+    if (slot == 0 && memories[0].freq != 0) {
+      portENTER_CRITICAL(&scanStatusMux);
+      scanStatus.resultCount = 0;
+      scanStatus.running = SCAN_DONE;
+      portEXIT_CRITICAL(&scanStatusMux);
+      goto restore;
+    }
 
     uint8_t written = 0;
     for (int i = 0; i < candidateCount && written < count && slot < MEMORY_COUNT; i++) {
@@ -327,8 +335,10 @@ void scanToMemoryAuto(uint8_t count) {
       slot++;
     }
 
+    portENTER_CRITICAL(&scanStatusMux);
     scanStatus.resultCount = written;
     scanStatus.running = SCAN_DONE;
+    portEXIT_CRITICAL(&scanStatusMux);
   }
 
 restore:
@@ -384,15 +394,19 @@ void scanManualStep() {
 void scanBookmark() {
   if (scanStatus.running != SCAN_RUNNING || scanStatus.mode != 1) return;
   if (scanStatus.bookmarkCount >= 20) return;
+  portENTER_CRITICAL(&scanStatusMux);
   int i = scanStatus.bookmarkCount;
   scanStatus.bookmarks[i] = scanStatus.currentFreq;
   scanStatus.bookmarkRSSI[i] = radioState.rssi;
   scanStatus.bookmarkCount++;
+  portEXIT_CRITICAL(&scanStatusMux);
 }
 
 void scanStop() {
-  if (scanStatus.running != SCAN_RUNNING) return;
+  portENTER_CRITICAL(&scanStatusMux);
+  if (scanStatus.running != SCAN_RUNNING) { portEXIT_CRITICAL(&scanStatusMux); return; }
   scanStatus.running = SCAN_DONE;
+  portEXIT_CRITICAL(&scanStatusMux);
 
   uint8_t slot = 0;
   for (int i = 0; i < MEMORY_COUNT; i++) {
@@ -557,6 +571,12 @@ void scanProcessTick()
       for (int i = 0; i < MEMORY_COUNT; i++) {
         if (memories[i].freq == 0) { autoScan.slot = i; break; }
       }
+      if (autoScan.slot == 0 && memories[0].freq != 0) {
+        // All memory slots full — abort
+        autoScan.phase = AUTO_PHASE_IDLE;
+        scanStatus.running = SCAN_DONE;
+        return;
+      }
 
       autoScan.phase = AUTO_PHASE_PROCESS;
       autoScan.settled = false;
@@ -667,7 +687,9 @@ doFinish:
 }
 
 void scanAbort() {
+  portENTER_CRITICAL(&scanStatusMux);
   scanStatus.running = SCAN_ABORTED;
+  portEXIT_CRITICAL(&scanStatusMux);
   seekStop = true;
 }
 

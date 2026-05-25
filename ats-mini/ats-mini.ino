@@ -24,6 +24,8 @@
 RadioState radioState = {0};
 portMUX_TYPE radioStateMux = portMUX_INITIALIZER_UNLOCKED;
 portMUX_TYPE encoderMux = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE audioMuteMux = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE seekStopMux = portMUX_INITIALIZER_UNLOCKED;
 
 // SI473/5 and UI
 #define ELAPSED_COMMAND      10000  // time to turn off the last command controlled by encoder. Time to goes back to the VFO control // G8PTN: Increased time and corrected comment
@@ -272,7 +274,9 @@ ICACHE_RAM_ATTR void rotaryEncoder()
     // Only abort seek on significant encoder movement (>=3 steps) to prevent
     // accidental abort from a single brush contact or vibration.
     if(abs(encoderCount) >= 3)
+      portENTER_CRITICAL_ISR(&seekStopMux);
       seekStop = true;
+      portEXIT_CRITICAL_ISR(&seekStopMux);
   }
 }
 

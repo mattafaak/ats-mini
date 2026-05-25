@@ -119,8 +119,23 @@ void netStop()
 //
 bool wifiInitConnection(uint8_t netMode, bool showStatus)
 {
-  // Always disable WiFi first
-  netStop();
+  // In NET_AP_CONNECT mode, if AP is already running, skip netStop()
+  // to avoid tearing down the AP (which would disconnect any connected
+  // clients). Just disconnect STA and let the AP continue serving.
+  bool apRunning = (netMode == NET_AP_CONNECT) &&
+                   (WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA);
+
+  if(!apRunning)
+  {
+    // Always disable WiFi first
+    netStop();
+  }
+  else
+  {
+    // AP is already running — only disconnect STA to force a fresh reconnect
+    MDNS.end();
+    WiFi.disconnect(true);
+  }
 
   switch(netMode)
   {
@@ -129,15 +144,21 @@ bool wifiInitConnection(uint8_t netMode, bool showStatus)
       return(false);
     case NET_AP_ONLY:
       // Start WiFi access point if requested
-      WiFi.mode(WIFI_AP);
-      // Let user see connection status if successful
-      if(wifiInitAP() && showStatus) delay(500);
+      if(!apRunning)
+      {
+        WiFi.mode(WIFI_AP);
+        // Let user see connection status if successful
+        if(wifiInitAP() && showStatus) delay(500);
+      }
       return(false);
     case NET_AP_CONNECT:
-      // Start WiFi access point if requested
-      WiFi.mode(WIFI_AP_STA);
-      // Let user see connection status if successful
-      if(wifiInitAP() && showStatus) delay(500);
+      // Start WiFi access point if requested (skip if already running)
+      if(!apRunning)
+      {
+        WiFi.mode(WIFI_AP_STA);
+        // Let user see connection status if successful
+        if(wifiInitAP() && showStatus) delay(500);
+      }
       break;
     default:
       // No access point

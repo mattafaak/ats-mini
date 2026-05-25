@@ -32,19 +32,19 @@ int bandIdx = 0;
 // Do not forget to update the bands table in the manual.md
 Band bands[] =
 {
-  {"VHF",  FM_BAND_TYPE, FM,   6400, 10800, 10390, 2, 0, 0, 0},
+  {"VHF",  FM_BAND_TYPE, FM,   6400, 10800, 10390, 0, 2, 0, 0, 0},
   // All band. LW, MW and SW (from 150kHz to 30MHz)
-  {"ALL",  SW_BAND_TYPE, AM,    150, 30000, 15000, 1, 4, 0, 0},
-  {"11M",  SW_BAND_TYPE, AM,  25600, 26100, 25850, 1, 4, 0, 0},
-  {"13M",  SW_BAND_TYPE, AM,  21500, 21900, 21650, 1, 4, 0, 0},
-  {"15M",  SW_BAND_TYPE, AM,  18900, 19100, 18950, 1, 4, 0, 0},
-  {"16M",  SW_BAND_TYPE, AM,  17400, 18100, 17650, 1, 4, 0, 0},
-  {"19M",  SW_BAND_TYPE, AM,  15100, 15900, 15450, 1, 4, 0, 0},
-  {"22M",  SW_BAND_TYPE, AM,  13500, 13900, 13650, 1, 4, 0, 0},
-  {"25M",  SW_BAND_TYPE, AM,  11000, 13000, 11850, 1, 4, 0, 0},
-  {"31M",  SW_BAND_TYPE, AM,   9000, 11000,  9650, 1, 4, 0, 0},
-  {"41M",  SW_BAND_TYPE, AM,   7000,  9000,  7300, 1, 4, 0, 0},
-  {"49M",  SW_BAND_TYPE, AM,   5000,  7000,  6000, 1, 4, 0, 0},
+  {"ALL",  SW_BAND_TYPE, AM,    150, 30000, 15000, 0, 1, 4, 0, 0},
+  {"11M",  SW_BAND_TYPE, AM,  25600, 26100, 25850, 0, 1, 4, 0, 0},
+  {"13M",  SW_BAND_TYPE, AM,  21500, 21900, 21650, 0, 1, 4, 0, 0},
+  {"15M",  SW_BAND_TYPE, AM,  18900, 19100, 18950, 0, 1, 4, 0, 0},
+  {"16M",  SW_BAND_TYPE, AM,  17400, 18100, 17650, 0, 1, 4, 0, 0},
+  {"19M",  SW_BAND_TYPE, AM,  15100, 15900, 15450, 0, 1, 4, 0, 0},
+  {"22M",  SW_BAND_TYPE, AM,  13500, 13900, 13650, 0, 1, 4, 0, 0},
+  {"25M",  SW_BAND_TYPE, AM,  11000, 13000, 11850, 0, 1, 4, 0, 0},
+  {"31M",  SW_BAND_TYPE, AM,   9000, 11000,  9650, 0, 1, 4, 0, 0},
+  {"41M",  SW_BAND_TYPE, AM,   7000,  9000,  7300, 0, 1, 4, 0, 0},
+  {"49M",  SW_BAND_TYPE, AM,   5000,  7000,  6000, 0, 1, 4, 0, 0},
   {"60M",  SW_BAND_TYPE, AM,   4000,  5100,  4950, 1, 4, 0, 0},
   {"75M",  SW_BAND_TYPE, AM,   3500,  4000,  3950, 1, 4, 0, 0},
   {"90M",  SW_BAND_TYPE, AM,   3000,  3500,  3300, 1, 4, 0, 0},
@@ -672,13 +672,12 @@ bool tuneToMemory(const Memory *memory)
   if(!isMemoryInBand(&bands[memory->band], memory)) return(false);
 
   // Must differ from the current band, frequency and modulation
-  // FIXME: bands should store frequency in Hz (otherwise sub-kHz
-  // digits are lost after a power cycle)
   if(memory->band==bandIdx && freq==bands[bandIdx].currentFreq && memory->mode==bands[bandIdx].bandMode)
     return(true);
 
   // Save current band settings
-  bands[bandIdx].currentFreq = getEffectiveFreq();
+  bands[bandIdx].currentFreq = radioState.frequency;
+  bands[bandIdx].currentBfo  = radioState.bfo;
 
   // Use default step when changing modes
   if(bands[memory->band].bandMode != memory->mode)
@@ -771,7 +770,8 @@ void doMode(int16_t enc)
   while(radioState.mode==FM);
 
   // Save current band settings
-  bands[bandIdx].currentFreq = getEffectiveFreq();
+  bands[bandIdx].currentFreq = radioState.frequency;
+  bands[bandIdx].currentBfo  = radioState.bfo;
   bands[bandIdx].currentStepIdx = defaultStepIdx[radioState.mode];
   bands[bandIdx].bandwidthIdx = defaultBwIdx[radioState.mode];
   bands[bandIdx].bandMode = radioState.mode;
@@ -803,7 +803,8 @@ void doSoftMute(int16_t enc)
 void doBand(int16_t enc)
 {
   // Save current band settings
-  bands[bandIdx].currentFreq = getEffectiveFreq();
+  bands[bandIdx].currentFreq = radioState.frequency;
+  bands[bandIdx].currentBfo  = radioState.bfo;
   bands[bandIdx].bandMode = radioState.mode;
 
   // Change band
@@ -1002,6 +1003,9 @@ void selectBand(uint8_t idx, bool drawLoadingSSB)
 
   // Switch radio to the selected band
   useBand(&bands[bandIdx]);
+
+  // Restore per-band BFO offset (useBand resets BFO to 0)
+  if(bands[bandIdx].currentBfo) updateBFO(bands[bandIdx].currentBfo, true);
 
   // Set bandwidth for the current mode
   setBandwidth();

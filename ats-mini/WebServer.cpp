@@ -247,7 +247,9 @@ void webInit()
       int v = value.toInt();
       if (v < 0) v = 0;
       if (v > 63) v = 63;
+      taskENTER_CRITICAL(&radioStateMux);
       radioState.vol = v;
+      taskEXIT_CRITICAL(&radioStateMux);
       rx.setVolume(radioState.vol);
       request->send(200, "application/json", "{\"status\":\"ok\"}");
       return;
@@ -321,8 +323,10 @@ void webInit()
     // --- squelch: direct value 0-127, preserves bit 7 (RSSI/SNR toggle) ---
     if (cmd == "squelch") {
       int v = constrain(value.toInt(), 0, 127);
+      taskENTER_CRITICAL(&radioStateMux);
       uint8_t s = radioState.squelch[radioState.mode];
       radioState.squelch[radioState.mode] = (s & 0x80) | v;
+      taskEXIT_CRITICAL(&radioStateMux);
       audioSquelchClose(v > 0 && v >= radioState.rssi);
       prefsRequestSave(SAVE_SETTINGS);
       request->send(200, "application/json", "{\"status\":\"ok\"}");
@@ -331,9 +335,11 @@ void webInit()
 
     // --- squelch_param: toggle RSSI/SNR bit ---
     if (cmd == "squelch_param") {
+      taskENTER_CRITICAL(&radioStateMux);
       uint8_t s = radioState.squelch[radioState.mode];
       if (value == "snr") radioState.squelch[radioState.mode] = s | 0x80;
       else radioState.squelch[radioState.mode] = s & ~0x80;
+      taskEXIT_CRITICAL(&radioStateMux);
       prefsRequestSave(SAVE_SETTINGS);
       request->send(200, "application/json", "{\"status\":\"ok\"}");
       return;
@@ -391,7 +397,9 @@ void webInit()
 
     // --- rds: mode bitmask ---
     if (cmd == "rds") {
+      taskENTER_CRITICAL(&radioStateMux);
       radioState.rdsMode = constrain(value.toInt(), 0, 63);
+      taskEXIT_CRITICAL(&radioStateMux);
       prefsRequestSave(SAVE_SETTINGS);
       request->send(200, "application/json", "{\"status\":\"ok\"}");
       return;
@@ -399,7 +407,9 @@ void webInit()
 
     // --- zoom: toggle ---
     if (cmd == "zoom") {
+      taskENTER_CRITICAL(&radioStateMux);
       radioState.zoomLevel = (value == "on" || value == "true" || value == "1") ? 1 : 0;
+      taskEXIT_CRITICAL(&radioStateMux);
       prefsRequestSave(SAVE_SETTINGS);
       request->send(200, "application/json", "{\"status\":\"ok\"}");
       return;
@@ -407,7 +417,9 @@ void webInit()
 
     // --- scroll: normal/reverse ---
     if (cmd == "scroll") {
+      taskENTER_CRITICAL(&radioStateMux);
       radioState.scrollDir = (value == "reverse") ? -1 : 1;
+      taskEXIT_CRITICAL(&radioStateMux);
       prefsRequestSave(SAVE_SETTINGS);
       request->send(200, "application/json", "{\"status\":\"ok\"}");
       return;
@@ -455,7 +467,9 @@ void webInit()
       if(!request->authenticate(loginUsername.c_str(), loginPassword.c_str()))
         return request->requestAuthentication();
     if(request->hasParam("idx", true)) {
+      taskENTER_CRITICAL(&radioStateMux);
       themeIdx = constrain(request->getParam("idx", true)->value().toInt(), 0, getTotalThemes() - 1);
+      taskEXIT_CRITICAL(&radioStateMux);
       prefsRequestSave(SAVE_SETTINGS, true);
     }
     request->send(200, "application/json", "{\"status\":\"ok\"}");
@@ -538,17 +552,19 @@ void webSetConfig(AsyncWebServerRequest *request)
   // Start modifying preferences
   prefs.begin("network", false, STORAGE_PARTITION);
 
-  // Save user name and password
+  // Save user name and password (max lengths to prevent heap exhaustion)
   if(request->hasParam("username", true) && request->hasParam("password", true))
   {
     loginUsername = request->getParam("username", true)->value();
+    if (loginUsername.length() > 32) loginUsername = loginUsername.substring(0, 32);
     loginPassword = request->getParam("password", true)->value();
+    if (loginPassword.length() > 64) loginPassword = loginPassword.substring(0, 64);
 
     prefs.putString("loginusername", loginUsername);
     prefs.putString("loginpassword", loginPassword);
   }
 
-  // Save SSIDs and their passwords
+  // Save SSIDs and their passwords (max lengths to prevent heap exhaustion)
   bool haveSSID = false;
   for(int j=0 ; j<3 ; j++)
   {
@@ -560,7 +576,9 @@ void webSetConfig(AsyncWebServerRequest *request)
     if(request->hasParam(nameSSID, true) && request->hasParam(namePASS, true))
     {
       String ssid = request->getParam(nameSSID, true)->value();
+      if (ssid.length() > 32) ssid = ssid.substring(0, 32);
       String pass = request->getParam(namePASS, true)->value();
+      if (pass.length() > 64) pass = pass.substring(0, 64);
       prefs.putString(nameSSID, ssid);
       prefs.putString(namePASS, pass);
       haveSSID |= ssid != "" && pass != "";
@@ -575,7 +593,9 @@ void webSetConfig(AsyncWebServerRequest *request)
   if(request->hasParam("utcoffset", true))
   {
     String utcOffset = request->getParam("utcoffset", true)->value();
+    taskENTER_CRITICAL(&radioStateMux);
     radioState.utcOffset = constrain(utcOffset.toInt(), -12, 14);
+    taskEXIT_CRITICAL(&radioStateMux);
     clockRefreshTime();
     prefsSave |= SAVE_SETTINGS;
   }
@@ -584,13 +604,17 @@ void webSetConfig(AsyncWebServerRequest *request)
   if(request->hasParam("theme", true))
   {
     String theme = request->getParam("theme", true)->value();
+    taskENTER_CRITICAL(&radioStateMux);
     themeIdx = constrain(theme.toInt(), 0, getTotalThemes() - 1);
+    taskEXIT_CRITICAL(&radioStateMux);
     prefsSave |= SAVE_SETTINGS;
   }
 
   // Save scroll direction and menu zoom
+  taskENTER_CRITICAL(&radioStateMux);
   radioState.scrollDir = request->hasParam("scroll", true)? -1 : 1;
   radioState.zoomLevel        = request->hasParam("zoom", true);
+  taskEXIT_CRITICAL(&radioStateMux);
   prefsSave |= SAVE_SETTINGS;
 
   // Done with the preferences

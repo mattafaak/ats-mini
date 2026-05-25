@@ -144,6 +144,8 @@ typedef struct {
 extern RadioState radioState;
 extern portMUX_TYPE radioStateMux;
 extern portMUX_TYPE encoderMux;
+extern portMUX_TYPE audioMuteMux;
+extern portMUX_TYPE seekStopMux;
 
 // Get the effective frequency in kHz, accounting for BFO offset in SSB mode.
 // Uses signed arithmetic and clamps to 0 to prevent unsigned integer underflow
@@ -193,6 +195,7 @@ typedef struct
   uint16_t minimumFreq;   // Minimum frequency of the band
   uint16_t maximumFreq;   // Maximum frequency of the band
   uint16_t currentFreq;   // Default frequency or current frequency
+  int16_t currentBfo;     // Current BFO offset (Hz)
   int8_t currentStepIdx;  // Default frequency step
   int8_t bandwidthIdx;    // Index of the table bandwidthFM, bandwidthAM or bandwidthSSB;
   int16_t usbCal;         // USB calibration value

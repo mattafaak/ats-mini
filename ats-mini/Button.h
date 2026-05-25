@@ -23,6 +23,7 @@ class ButtonTracker {
     bool lastStableState; // Last debounced state
     unsigned long lastDebounceTime;
     unsigned long pressStartTime;
+    bool longPressFired; // Prevents repeated long-press events
 };
 
 #endif

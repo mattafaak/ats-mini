@@ -10,6 +10,7 @@ void ButtonTracker::reset() {
   lastStableState = false;
   lastDebounceTime = millis();
   pressStartTime = 0;
+  longPressFired = false;
 }
 
 ButtonTracker::State ButtonTracker::update(bool currentState, unsigned int debounceInterval) {
@@ -32,6 +33,7 @@ ButtonTracker::State ButtonTracker::update(bool currentState, unsigned int debou
       if (currentState) {
         pressStartTime = now;
       } else { // Handle release
+        longPressFired = false;
         unsigned long pressDuration = now - pressStartTime;
         if (pressDuration < LONG_PRESS_INTERVAL) {
           if (pressDuration >= SHORT_PRESS_INTERVAL) {
@@ -47,9 +49,10 @@ ButtonTracker::State ButtonTracker::update(bool currentState, unsigned int debou
   // Update current pressed state
   result.isPressed = lastStableState;
 
-  // Check for long press (still pressed)
+  // Check for long press (still pressed) — edge-triggered: fires once per press
   if (result.isPressed) {
-    result.isLongPressed = ((now - pressStartTime) >= LONG_PRESS_INTERVAL);
+    result.isLongPressed = ((now - pressStartTime) >= LONG_PRESS_INTERVAL && !longPressFired);
+    if (result.isLongPressed) longPressFired = true;
   }
   return result;
 }

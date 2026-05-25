@@ -66,6 +66,7 @@ void audioInit(void)
 //
 void audioMuteForce(bool on)
 {
+  portENTER_CRITICAL(&audioMuteMux);
   if(on) {
     effectiveMuted = true;
     applyMute(true);
@@ -75,6 +76,7 @@ void audioMuteForce(bool on)
       applyMute(false);
     }
   }
+  portEXIT_CRITICAL(&audioMuteMux);
 }
 
 //
@@ -82,6 +84,7 @@ void audioMuteForce(bool on)
 //
 void audioMuteMain(bool on)
 {
+  portENTER_CRITICAL(&audioMuteMux);
   if(on) {
     effectiveMuted = true;
     if(!mainMuted && !squelchMuted) {
@@ -95,6 +98,7 @@ void audioMuteMain(bool on)
     }
     mainMuted = false;
   }
+  portEXIT_CRITICAL(&audioMuteMux);
 }
 
 //
@@ -102,6 +106,7 @@ void audioMuteMain(bool on)
 //
 void audioSquelchClose(bool on)
 {
+  portENTER_CRITICAL(&audioMuteMux);
   if(on) {
     effectiveMuted = true;
     if(!mainMuted && !squelchMuted) {
@@ -115,6 +120,7 @@ void audioSquelchClose(bool on)
     }
     squelchMuted = false;
   }
+  portEXIT_CRITICAL(&audioMuteMux);
 }
 
 //
@@ -122,6 +128,7 @@ void audioSquelchClose(bool on)
 //
 void audioTempMute(bool on)
 {
+  portENTER_CRITICAL(&audioMuteMux);
   if(on) {
     effectiveMuted = true;
     if(!mainMuted && !squelchMuted) {
@@ -133,6 +140,7 @@ void audioTempMute(bool on)
       applyMute(false);
     }
   }
+  portEXIT_CRITICAL(&audioMuteMux);
 }
 
 //

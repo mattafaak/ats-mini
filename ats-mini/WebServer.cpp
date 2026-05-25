@@ -551,8 +551,8 @@ void webSetConfig(AsyncWebServerRequest *request)
   {
     char nameSSID[16], namePASS[16];
 
-    sprintf(nameSSID, "wifissid%d", j+1);
-    sprintf(namePASS, "wifipass%d", j+1);
+    snprintf(nameSSID, sizeof(nameSSID), "wifissid%d", j+1);
+    snprintf(namePASS, sizeof(namePASS), "wifipass%d", j+1);
 
     if(request->hasParam(nameSSID, true) && request->hasParam(namePASS, true))
     {
@@ -832,7 +832,7 @@ static const String webUtcOffsetSelector()
   {
     char text[64];
 
-    sprintf(text,
+    snprintf(text, sizeof(text),
       "<OPTION VALUE='%d'%s>%s</OPTION>",
       i, radioState.utcOffset==i? " SELECTED":"",
       utcOffsets[i].desc
@@ -853,7 +853,7 @@ static const String webThemeSelector()
   {
     char text[64];
 
-    sprintf(text,
+    snprintf(text, sizeof(text),
       "<OPTION VALUE='%d'%s>%s</OPTION>",
        i, themeIdx==i? " SELECTED":"", theme[i].name
     );
@@ -1045,7 +1045,7 @@ static const String webMemoryPage()
   for(int j=0 ; j<MEMORY_COUNT ; j++)
   {
     char text[64];
-    sprintf(text, "<TR><TD CLASS='LABEL' WIDTH='10%%'>%02d</TD><TD>", j+1);
+    snprintf(text, sizeof(text), "<TR><TD CLASS='LABEL' WIDTH='10%%'>%02d</TD><TD>", j+1);
     items += text;
 
     if(!memories[j].freq)

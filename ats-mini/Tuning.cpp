@@ -286,8 +286,14 @@ bool doSeek(int16_t enc, int16_t enca)
 
       // Clear stale abort state before starting seek
       consumeAbortPending();
+      uint16_t preSeekFreq = radioState.frequency;
       rx.seekStationProgress(showFrequencySeek, consumeAbortPending, enc>0? 1 : 0);
-      updateFrequency(rx.getFrequency(), true);
+      uint16_t seekedFreq = rx.getFrequency();
+      Band *band = getCurrentBand();
+      if (seekedFreq < band->minimumFreq || seekedFreq > band->maximumFreq) {
+        seekedFreq = preSeekFreq;
+      }
+      updateFrequency(seekedFreq, true);
     }
   }
   else if(seekMode() == SEEK_SCHEDULE && enc)

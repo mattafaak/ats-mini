@@ -114,7 +114,7 @@ bool drawBattery(int x, int y)
     int level;
 
     // Text representation of the voltage
-    sprintf(voltage, "%.02fV", batteryVolts);
+    snprintf(voltage, sizeof(voltage), "%.02fV", batteryVolts);
 
     // Battery bar color and width
     switch(batteryState)

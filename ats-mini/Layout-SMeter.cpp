@@ -62,14 +62,14 @@ static void drawSmallScale(uint32_t freq, int y)
   spr.setTextColor(TH.scale_text);
   spr.setTextDatum(MC_DATUM);
   if(band->bandType==FM_BAND_TYPE)
-    sprintf(lim, "%0.2f", band->minimumFreq/100.00);
+    snprintf(lim, sizeof(lim), "%0.2f", band->minimumFreq/100.00);
   else
-    sprintf(lim, "%u", band->minimumFreq);
+    snprintf(lim, sizeof(lim), "%u", band->minimumFreq);
   spr.drawString(lim, scaleStart-27, y, 2);
   if(band->bandType==FM_BAND_TYPE)
-    sprintf(lim, "%0.2f", band->maximumFreq/100.00);
+    snprintf(lim, sizeof(lim), "%0.2f", band->maximumFreq/100.00);
   else
-    sprintf(lim, "%u", band->maximumFreq);
+    snprintf(lim, sizeof(lim), "%u", band->maximumFreq);
   spr.drawString(lim, scaleEnd+27, y, 2);
 }
 

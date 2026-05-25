@@ -385,7 +385,7 @@ static void drawUTCOffset(int x, int y, int sx)
 static void drawMemory(int x, int y, int sx)
 {
   char label_memory[16];
-  sprintf(label_memory, "%s %2.2d", menu[MENU_MEMORY], memoryIdx + 1);
+  snprintf(label_memory, sizeof(label_memory), "%s %2.2d", menu[MENU_MEMORY], memoryIdx + 1);
   drawCommon(label_memory, x, y, sx, true);
 
   int count = getTotalMemories();
@@ -398,9 +398,9 @@ static void drawMemory(int x, int y, int sx)
     if(!memories[j].freq)
       text = "- - -";
     else if(memories[j].mode==FM)
-      sprintf(buf, "%3.2f %s", memories[j].freq / 1000000.0, bandModeDesc[memories[j].mode]);
+      snprintf(buf, sizeof(buf), "%3.2f %s", memories[j].freq / 1000000.0, bandModeDesc[memories[j].mode]);
     else
-      sprintf(buf, "%5lu %s", memories[j].freq / 1000, bandModeDesc[memories[j].mode]);
+      snprintf(buf, sizeof(buf), "%5lu %s", memories[j].freq / 1000, bandModeDesc[memories[j].mode]);
 
     if(i==0) {
       drawZoomedMenu(text);
@@ -449,7 +449,7 @@ static void drawAgc(int x, int y, int sx)
   else
   {
     char text[16];
-    sprintf(text, "%2.2d", radioState.agcNdxVal);
+    snprintf(text, sizeof(text), "%2.2d", radioState.agcNdxVal);
     spr.drawString(text, 40+x+(sx/2), 60+y, 7);
   }
 }
@@ -616,7 +616,7 @@ static void drawInfo(int x, int y, int sx)
   }
   else
   {
-    sprintf(text, "%2.2d", radioState.agcNdxVal);
+    snprintf(text, sizeof(text), "%2.2d", radioState.agcNdxVal);
     spr.drawString(F("Att:"), 6+x, 64+y+(-1*16), 2);
     spr.drawString(text, 48+x, 64+y+(-1*16), 2);
   }
@@ -625,7 +625,7 @@ static void drawInfo(int x, int y, int sx)
   if(audioIsMainMuted() || audioIsSquelched())
   {
     spr.setTextColor(TH.box_off_text, TH.box_off_bg);
-    sprintf(text, audioIsMainMuted() ? "Muted" : "%d/sq", radioState.vol);
+    snprintf(text, sizeof(text), audioIsMainMuted() ? "Muted" : "%d/sq", radioState.vol);
     spr.drawString(text, 48+x, 64+y+(0*16), 2);
     spr.setTextColor(TH.box_text);
   }
@@ -639,7 +639,7 @@ static void drawInfo(int x, int y, int sx)
   uint16_t piCode = getRdsPiCode();
   if(piCode && radioState.mode == FM)
   {
-    sprintf(text, "%04X", piCode);
+    snprintf(text, sizeof(text), "%04X", piCode);
     spr.drawString(F("PI:"), 6+x, 64+y + (1*16), 2);
     spr.drawString(text, 48+x, 64+y + (1*16), 2);
   }
@@ -648,11 +648,11 @@ static void drawInfo(int x, int y, int sx)
     spr.drawString(F("AVC:"), 6+x, 64+y + (1*16), 2);
 
     if(radioState.mode==FM)
-      sprintf(text, "n/a");
+      snprintf(text, sizeof(text), "n/a");
     else if(isSSB())
-      sprintf(text, "%2.2ddB", radioState.ssbAvcIdx);
+      snprintf(text, sizeof(text), "%2.2ddB", radioState.ssbAvcIdx);
     else
-      sprintf(text, "%2.2ddB", radioState.amAvcIdx);
+      snprintf(text, sizeof(text), "%2.2ddB", radioState.amAvcIdx);
 
     spr.drawString(text, 48+x, 64+y + (1*16), 2);
   }

@@ -269,7 +269,7 @@ static const char *findCBChannelByFreq(uint16_t freq)
   int row_number = remainder / row_step;
   if((row_number>=max_rows) || (row_number<0)) return(0);
 
-  sprintf(buf, "%c%s%c", 'A' + column_index, cbChannelNumber[row_number], type);
+  snprintf(buf, sizeof(buf), "%c%s%c", 'A' + column_index, cbChannelNumber[row_number], type);
   return(buf);
 }
 

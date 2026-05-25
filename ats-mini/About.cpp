@@ -67,8 +67,8 @@ static void drawAboutSystem(uint8_t arrow)
   drawAboutCommon(arrow);
 
   char text[100];
-  sprintf(
-    text,
+  snprintf(
+    text, sizeof(text),
     "CPU: %s r%i, %lu MHz",
     ESP.getChipModel(),
     ESP.getChipRevision(),
@@ -76,8 +76,8 @@ static void drawAboutSystem(uint8_t arrow)
   );
   spr.drawString(text, 2, 70 + 16 * -1, 2);
 
-  sprintf(
-    text,
+  snprintf(
+    text, sizeof(text),
     "FLASH: %luM, %luk (%luk), FS %luk (%luk)",
     ESP.getFlashChipSize() / (1024U * 1024U),
     ESP.getFreeSketchSpace() / 1024U,
@@ -89,8 +89,8 @@ static void drawAboutSystem(uint8_t arrow)
 
   nvs_stats_t nvs_stats;
   nvs_get_stats(STORAGE_PARTITION, &nvs_stats);
-  sprintf(
-    text,
+  snprintf(
+    text, sizeof(text),
     "NVS: TOTAL %u, USED %u, FREE %u",
     nvs_stats.total_entries,
     nvs_stats.used_entries,
@@ -98,16 +98,16 @@ static void drawAboutSystem(uint8_t arrow)
   );
   spr.drawString(text, 2, 70 + 16 * 1, 2);
 
-  sprintf(
-    text,
+  snprintf(
+    text, sizeof(text),
     "MEM: HEAP %luk (%luk), PSRAM %luk (%luk)",
     ESP.getHeapSize()/1024U, ESP.getFreeHeap()/1024U,
     ESP.getPsramSize()/1024U, ESP.getFreePsram()/1024U
   );
   spr.drawString(text, 2, 70 + 16 * 2, 2);
 
-  sprintf(
-    text,
+  snprintf(
+    text, sizeof(text),
     "Display ID: %08lX, STAT: %02X%08lX",
 #if !defined(LILYGO_SI473X)
     tft.readcommand32(ST7789_RDDID, 1),
@@ -120,7 +120,7 @@ static void drawAboutSystem(uint8_t arrow)
   spr.drawString(text, 2, 70 + 16 * 3, 2);
 
   String ip = getWiFiIPAddress();
-  sprintf(text, "WiFi MAC: %s%s%s", getMACAddress(), ip.length() ? ", IP: " : "", ip.length() ? ip.c_str() : "");
+  snprintf(text, sizeof(text), "WiFi MAC: %s%s%s", getMACAddress(), ip.length() ? ", IP: " : "", ip.length() ? ip.c_str() : "");
   spr.drawString(text, 2, 70 + 16 * 4, 2);
 
   for(int i=0 ; i<8 ; i++)

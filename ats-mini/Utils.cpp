@@ -37,7 +37,7 @@ const char *getVersion(bool shorter)
 {
   static char versionString[35] = "\0";
 
-  sprintf(versionString, "%s%sF/W: v%1.1d.%2.2d %s",
+  snprintf(versionString, sizeof(versionString), "%s%sF/W: v%1.1d.%2.2d %s",
     shorter ? "" : RECEIVER_NAME,
     shorter ? "" : " ",
     VER_APP / 100,
@@ -58,8 +58,8 @@ const char *getMACAddress()
   if(!macString[0])
   {
     uint64_t mac = ESP.getEfuseMac();
-    sprintf(
-      macString,
+    snprintf(
+      macString, sizeof(macString),
       "%02X:%02X:%02X:%02X:%02X:%02X",
       (uint8_t)mac,
       (uint8_t)(mac >> 8),
@@ -203,7 +203,7 @@ static void formatClock(uint8_t hours, uint8_t minutes)
 {
   int t = (int)hours * 60 + minutes + getCurrentUTCOffset() * 15;
   t = t < 0? t + 24*60 : t;
-  sprintf(clockText, "%02d:%02d", (t / 60) % 24, t % 60);
+  snprintf(clockText, sizeof(clockText), "%02d:%02d", (t / 60) % 24, t % 60);
 }
 
 void clockRefreshTime()

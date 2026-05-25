@@ -155,7 +155,7 @@ void webInit()
     json += String("\"sleep\":") + (sleepOn() ? "true" : "false") + ",";
     json += "\"wifi_mode\":\"" + wifiStatusStr + "\",";
     json += "\"wifi_rssi\":" + String(ws == 2 ? WiFi.RSSI() : 0) + ",";
-    json += "\"ip_address\":\"" + String(getWiFiIPAddress()) + "\",";
+    json += "\"ip_address\":\"" + getWiFiIPAddress() + "\",";
     json += "\"station_name\":\"" + jsonEscape(String(getStationName())) + "\",";
     json += "\"program_info\":\"" + jsonEscape(String(getProgramInfo())) + "\",";
     json += "\"rssi\":" + String(radioState.rssi) + ",";

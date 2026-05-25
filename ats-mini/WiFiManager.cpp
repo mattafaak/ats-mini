@@ -88,10 +88,9 @@ int8_t getWiFiStatus()
   }
 }
 
-char *getWiFiIPAddress()
+String getWiFiIPAddress()
 {
-  static char ip[16];
-  return strcpy(ip, WiFi.status()==WL_CONNECTED ? WiFi.localIP().toString().c_str() : "");
+  return WiFi.status()==WL_CONNECTED ? WiFi.localIP().toString() : String("");
 }
 
 //

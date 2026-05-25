@@ -162,7 +162,7 @@ void webInit()
     int avcIdx = (rs.mode == USB || rs.mode == LSB) ? rs.ssbAvcIdx : rs.amAvcIdx;
 
     String json;
-    json.reserve(640);
+    json.reserve(1024);
     json = "{";
     json += "\"firmware\":" + String(VER_APP) + ",";
     json += "\"frequency_khz\":" + String(effFreq < 0 ? 0 : (uint16_t)effFreq) + ",";
@@ -434,7 +434,7 @@ void webInit()
       if(!request->authenticate(loginUsername.c_str(), loginPassword.c_str()))
         return request->requestAuthentication();
     String json;
-    json.reserve(512);
+    json.reserve(1024);
     json = "{";
     json += "\"idx\":" + String(themeIdx) + ",";
     json += "\"name\":\"" + String(TH.name) + "\",";
@@ -486,7 +486,7 @@ void webInit()
     if (cmd == "status" || cmd == "poll") {
       ScanStatus s; scanCopyStatus(&s);
       String json;
-      json.reserve(640);
+      json.reserve(1024);
       json = "{";
       json += "\"running\":" + String(s.running) + ",";
       json += "\"mode\":" + String(s.mode) + ",";
@@ -1067,7 +1067,7 @@ static const String webControlsPage()
 static const String webMemoryPage()
 {
   String items = "";
-  items.reserve(8192);
+  items.reserve(10240);
 
   for(int j=0 ; j<MEMORY_COUNT ; j++)
   {
@@ -1075,16 +1075,25 @@ static const String webMemoryPage()
     snprintf(text, sizeof(text), "<TR><TD CLASS='LABEL' WIDTH='10%%'>%02d</TD><TD>", j+1);
     items += text;
 
-    if(!memories[j].freq)
+    uint32_t memFreq;
+    uint8_t memMode;
+    char memName[11];
+    portENTER_CRITICAL(&memoriesMux);
+    memFreq = memories[j].freq;
+    memMode = memories[j].mode;
+    strlcpy(memName, memories[j].name, sizeof(memName));
+    portEXIT_CRITICAL(&memoriesMux);
+
+    if(!memFreq)
       items += "&nbsp;---&nbsp;</TD></TR>";
     else {
       String freq;
-      if (memories[j].mode == FM)
-        freq = String((float)memories[j].freq / 1000000.0, 1) + " MHz";
+      if (memMode == FM)
+        freq = String((float)memFreq / 1000000.0, 1) + " MHz";
       else
-        freq = String(memories[j].freq / 1000) + " kHz";
-      if (memories[j].name[0]) freq += " - " + htmlEscape(String(memories[j].name));
-      items += freq + " " + String(bandModeDesc[memories[j].mode]) + "</TD></TR>";
+        freq = String(memFreq / 1000) + " kHz";
+      if (memName[0]) freq += " - " + htmlEscape(String(memName));
+      items += freq + " " + String(bandModeDesc[memMode]) + "</TD></TR>";
     }
   }
 

@@ -56,7 +56,9 @@ static void drawSmallScale(uint32_t freq, int y)
   for(int i=scaleStart+3; i<=scaleEnd-3; i+=2) spr.drawPixel(i, y, TH.scale_line);
   spr.drawCircle(scaleStart, y, 3, TH.scale_line);
   spr.drawCircle(scaleEnd, y, 3, TH.scale_line);
-  spr.fillCircle(scaleStart + (scaleEnd-scaleStart) * (freq - band->minimumFreq) / (band->maximumFreq - band->minimumFreq), y, 3, TH.scale_pointer);
+  int32_t range = (int32_t)band->maximumFreq - band->minimumFreq;
+  int32_t pos = range > 0 ? scaleStart + (int32_t)(scaleEnd - scaleStart) * (freq - band->minimumFreq) / range : scaleStart;
+  spr.fillCircle(pos, y, 3, TH.scale_pointer);
 
   char lim[8];
   spr.setTextColor(TH.scale_text);

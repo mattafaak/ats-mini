@@ -273,10 +273,11 @@ ICACHE_RAM_ATTR void rotaryEncoder()
 
     // Only abort seek on significant encoder movement (>=3 steps) to prevent
     // accidental abort from a single brush contact or vibration.
-    if(abs(encoderCount) >= 3)
+    if(abs(encoderCount) >= 3) {
       portENTER_CRITICAL_ISR(&seekStopMux);
       seekStop = true;
       portEXIT_CRITICAL_ISR(&seekStopMux);
+    }
   }
 }
 

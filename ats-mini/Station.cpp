@@ -69,23 +69,32 @@ static char bufStationName[50]  = "";
 static char bufRadioText[100]   = "";
 static char bufProgramInfo[100] = "";
 static uint16_t piCode = 0x0000;
+static portMUX_TYPE stationBufMux = portMUX_INITIALIZER_UNLOCKED;
 
 const char *getStationName()
 {
   if(switchThemeEditor())
     return("*STATION*");
-  else
-    return(getRDSMode() & RDS_PS? bufStationName : "");
+  portENTER_CRITICAL(&stationBufMux);
+  const char *result = (getRDSMode() & RDS_PS) ? bufStationName : "";
+  portEXIT_CRITICAL(&stationBufMux);
+  return result;
 }
 
 const char *getRadioText()
 {
-  return(getRDSMode() & RDS_RT? bufRadioText : "");
+  portENTER_CRITICAL(&stationBufMux);
+  const char *result = (getRDSMode() & RDS_RT) ? bufRadioText : "";
+  portEXIT_CRITICAL(&stationBufMux);
+  return result;
 }
 
 const char *getProgramInfo()
 {
-  return(getRDSMode() & RDS_RT? bufProgramInfo : "");
+  portENTER_CRITICAL(&stationBufMux);
+  const char *result = (getRDSMode() & RDS_RT) ? bufProgramInfo : "";
+  portEXIT_CRITICAL(&stationBufMux);
+  return result;
 }
 
 uint16_t getRdsPiCode()
@@ -95,16 +104,20 @@ uint16_t getRdsPiCode()
 
 void clearStationInfo()
 {
+  portENTER_CRITICAL(&stationBufMux);
   bufStationName[0] = '\0';
   bufProgramInfo[0] = '\0';
   bufRadioText[0]   = '\0'; // Multiline!
   bufRadioText[1]   = '\0';
   piCode = 0x0000;
+  portEXIT_CRITICAL(&stationBufMux);
 }
 
 static bool showStationName(const char *stationName, bool isLong = false)
 {
-  if(stationName && strcmp((isLong && bufStationName[0] == 0xFF) ? bufStationName + 1 : bufStationName, stationName))
+  portENTER_CRITICAL(&stationBufMux);
+  bool changed = stationName && strcmp((isLong && bufStationName[0] == 0xFF) ? bufStationName + 1 : bufStationName, stationName);
+  if(changed)
   {
     // If the name is explicitly marked as long, add 0xFF in front of it
     // This is done to display the EiBi names differently
@@ -115,10 +128,9 @@ static bool showStationName(const char *stationName, bool isLong = false)
     }
     else
       strlcpy(bufStationName, stationName, sizeof(bufStationName));
-    return(true);
   }
-
-  return(false);
+  portEXIT_CRITICAL(&stationBufMux);
+  return changed;
 }
 
 static bool showRadioText(const char *radioText, uint8_t width = 32)
@@ -132,6 +144,8 @@ static bool showRadioText(const char *radioText, uint8_t width = 32)
 
   // Skip leading whitespace
   for(i=0 ; (i<64) && radioText[i] && (radioText[i]<=' ') ; i++);
+
+  portENTER_CRITICAL(&stationBufMux);
 
   // Terminate at 0x0D, split into lines by 0x0A
   for(j=0 ; (i<64) && radioText[i] && (radioText[i]!=0x0D) ; i++)
@@ -161,19 +175,20 @@ static bool showRadioText(const char *radioText, uint8_t width = 32)
   bufRadioText[i++] = '\0';
   bufRadioText[i++] = '\0';
 
+  portEXIT_CRITICAL(&stationBufMux);
+
   // Done
   return(changed);
 }
 
 static bool showProgramInfo(const char *programInfo)
 {
-  if(programInfo && strcmp(bufProgramInfo, programInfo))
-  {
+  portENTER_CRITICAL(&stationBufMux);
+  bool changed = programInfo && strcmp(bufProgramInfo, programInfo);
+  if(changed)
     strlcpy(bufProgramInfo, programInfo, sizeof(bufProgramInfo));
-    return(true);
-  }
-
-  return(false);
+  portEXIT_CRITICAL(&stationBufMux);
+  return changed;
 }
 
 static bool showRdsProgramType(uint8_t pgmType, bool useRBDS = false)

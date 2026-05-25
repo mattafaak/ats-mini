@@ -12,13 +12,13 @@
 //
 
 // Current main mute status
-static bool mainMuted = false;
+static volatile bool mainMuted = false;
 
 // Current squelch mute status
-static bool squelchMuted = false;
+static volatile bool squelchMuted = false;
 
 // Effective mute status (last requested state)
-static bool effectiveMuted = false;
+static volatile bool effectiveMuted = false;
 
 //
 // Apply or release hardware mute.

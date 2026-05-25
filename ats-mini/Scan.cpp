@@ -204,7 +204,9 @@ void scanRun(uint16_t centerFreq, uint16_t step)
   // Mute the audio
   audioTempMute(true);
   // Flag is set by rotary encoder and cleared on seek/scan entry
+  portENTER_CRITICAL(&seekStopMux);
   seekStop = false;
+  portEXIT_CRITICAL(&seekStopMux);
   // Save current frequency
   uint16_t curFreq = rx.getFrequency();
   // Scan the whole range
@@ -232,7 +234,9 @@ void scanToMemoryAuto(uint8_t count) {
   int origBfo = radioState.bfo;
 
   audioTempMute(true);
+  portENTER_CRITICAL(&seekStopMux);
   seekStop = false;
+  portEXIT_CRITICAL(&seekStopMux);
   memset(&scanStatus, 0, sizeof(scanStatus));
   scanStatus.running = SCAN_RUNNING;
   scanStatus.mode = 0;
@@ -246,7 +250,11 @@ void scanToMemoryAuto(uint8_t count) {
     uint16_t candidateCount = 0;
 
     while (freq <= band->maximumFreq && stepCount < SCAN_POINTS) {
-      if (consumeAbortPending() || seekStop) {
+      if (consumeAbortPending()) { scanStatus.running = SCAN_ABORTED; goto restore; }
+      portENTER_CRITICAL(&seekStopMux);
+      bool stopReq = seekStop;
+      portEXIT_CRITICAL(&seekStopMux);
+      if (stopReq) {
         scanStatus.running = SCAN_ABORTED;
         goto restore;
       }
@@ -320,11 +328,13 @@ void scanToMemoryAuto(uint8_t count) {
       }
 
       // Write to memory
+      portENTER_CRITICAL(&memoriesMux);
       uint32_t fHz = (uint32_t)candidates[i].freq * 1000;
       memories[slot].freq = fHz;
       memories[slot].band = bandIdx;
       memories[slot].mode = radioState.mode;
       strlcpy(memories[slot].name, name, sizeof(memories[slot].name));
+      portEXIT_CRITICAL(&memoriesMux);
       prefsSaveMemory(slot, true);
 
       scanStatus.results[written].slot = slot + 1;
@@ -392,9 +402,11 @@ void scanManualStep() {
 }
 
 void scanBookmark() {
-  if (scanStatus.running != SCAN_RUNNING || scanStatus.mode != 1) return;
-  if (scanStatus.bookmarkCount >= 20) return;
   portENTER_CRITICAL(&scanStatusMux);
+  if (scanStatus.running != SCAN_RUNNING || scanStatus.mode != 1 || scanStatus.bookmarkCount >= 20) {
+    portEXIT_CRITICAL(&scanStatusMux);
+    return;
+  }
   int i = scanStatus.bookmarkCount;
   scanStatus.bookmarks[i] = scanStatus.currentFreq;
   scanStatus.bookmarkRSSI[i] = radioState.rssi;
@@ -444,10 +456,12 @@ void scanStop() {
     }
 
     uint32_t fHz = (uint32_t)freq * 1000;
+    portENTER_CRITICAL(&memoriesMux);
     memories[slot].freq = fHz;
     memories[slot].band = bandIdx;
     memories[slot].mode = radioState.mode;
     strlcpy(memories[slot].name, name, sizeof(memories[slot].name));
+    portEXIT_CRITICAL(&memoriesMux);
     prefsSaveMemory(slot, true);
 
     scanStatus.results[written].slot = slot + 1;
@@ -521,8 +535,14 @@ void scanProcessTick()
   if (autoScan.phase == AUTO_PHASE_IDLE) return;
 
   // Check abort
-  if (consumeAbortPending() || seekStop) {
-    goto doAbort;
+  if (consumeAbortPending()) { goto doAbort; }
+  {
+    portENTER_CRITICAL(&seekStopMux);
+    bool stopReq = seekStop;
+    portEXIT_CRITICAL(&seekStopMux);
+    if (stopReq) {
+      goto doAbort;
+    }
   }
 
   // Yield to FreeRTOS watchdog
@@ -634,11 +654,13 @@ void scanProcessTick()
       }
 
       // Save to memory
+      portENTER_CRITICAL(&memoriesMux);
       uint32_t fHz = (uint32_t)c->freq * 1000;
       memories[autoScan.slot].freq = fHz;
       memories[autoScan.slot].band = bandIdx;
       memories[autoScan.slot].mode = radioState.mode;
       strlcpy(memories[autoScan.slot].name, autoScan.nameBuf, sizeof(memories[autoScan.slot].name));
+      portEXIT_CRITICAL(&memoriesMux);
       prefsSaveMemory(autoScan.slot, true);
 
       portENTER_CRITICAL(&scanStatusMux);
@@ -690,7 +712,9 @@ void scanAbort() {
   portENTER_CRITICAL(&scanStatusMux);
   scanStatus.running = SCAN_ABORTED;
   portEXIT_CRITICAL(&scanStatusMux);
+  portENTER_CRITICAL(&seekStopMux);
   seekStop = true;
+  portEXIT_CRITICAL(&seekStopMux);
 }
 
 bool scanIsRunning() {

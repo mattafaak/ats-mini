@@ -363,24 +363,22 @@ size_t BleUartPeripheral::printf(const char* format, ...)
   va_end(args);
   if (requiredSize == 0)
   {
-    return write((uint8_t*)&dummy, 1);
+    return 0;
   }
   else if (requiredSize > 0)
   {
     char* buffer = (char*)malloc(requiredSize + 1);
-    if (buffer)
+    if (!buffer) return 0;
+    va_start(args, format);
+    int result = vsnprintf(buffer, requiredSize + 1, format, args);
+    va_end(args);
+    if ((result >= 0) && (result <= requiredSize))
     {
-      va_start(args, format);
-      int result = vsnprintf(buffer, requiredSize + 1, format, args);
-      va_end(args);
-      if ((result >= 0) && (result <= requiredSize))
-      {
-        size_t writtenBytesCount = write((uint8_t*)buffer, result);
-        free(buffer);
-        return writtenBytesCount;
-      }
+      size_t writtenBytesCount = write((uint8_t*)buffer, result);
       free(buffer);
+      return writtenBytesCount;
     }
+    free(buffer);
   }
   return 0;
 }

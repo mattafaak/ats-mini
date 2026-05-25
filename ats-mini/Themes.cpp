@@ -437,7 +437,7 @@ ColorTheme theme[] =
   },
 };
 
-uint8_t themeIdx = 0;
+volatile uint8_t themeIdx = 0;
 int getTotalThemes() { return(ITEM_COUNT(theme)); }
 
 //

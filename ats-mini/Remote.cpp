@@ -177,7 +177,11 @@ static void remoteGetMemories(Stream* stream)
 {
   for (uint8_t i = 0; i < getTotalMemories(); i++) {
     if (memories[i].freq) {
-      stream->printf("#%02d,%s,%ld,%s\r\n", i + 1, bands[memories[i].band].bandName, memories[i].freq, bandModeDesc[memories[i].mode]);
+      uint8_t b = memories[i].band;
+      uint8_t m = memories[i].mode;
+      if (b < getTotalBands() && m <= AM) {
+        stream->printf("#%02d,%s,%ld,%s\r\n", i + 1, bands[b].bandName, memories[i].freq, bandModeDesc[m]);
+      }
     }
   }
 }

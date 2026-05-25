@@ -30,6 +30,7 @@ extern Band bands[];
 
 // Memory
 extern Memory memories[];
+extern portMUX_TYPE memoriesMux;
 
 // Menu and settings text
 extern const char *menu[];

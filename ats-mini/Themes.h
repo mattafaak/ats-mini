@@ -66,7 +66,7 @@ typedef struct __attribute__ ((packed))
   uint16_t scan_rssi;
 } ColorTheme;
 
-extern uint8_t themeIdx;
+extern volatile uint8_t themeIdx;
 int getTotalThemes();
 
 extern ColorTheme theme[];

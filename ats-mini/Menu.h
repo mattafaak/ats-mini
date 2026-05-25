@@ -95,7 +95,7 @@
 //
 // Mutable State
 //
-extern int bandIdx;
+extern volatile int bandIdx;
 extern int8_t menuIdx;
 extern int8_t settingsIdx;
 extern uint8_t memoryIdx;

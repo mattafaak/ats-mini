@@ -392,7 +392,7 @@ static void drawMemory(int x, int y, int sx)
   for(int i=-2 ; i<3 ; i++)
   {
     int j = abs((memoryIdx+count+i)%count);
-    char buf[16];
+    char buf[24];
     const char *text = buf;
 
     if(!memories[j].freq)

@@ -462,7 +462,7 @@ bool eibiLoadSchedule()
   int totalLen = http.getSize();
   int byteCnt, lineCnt, charCnt;
   bool writeFailed = false;
-  char charBuf[200];
+  char charBuf[512];
 
   for(byteCnt = charCnt = lineCnt = 0 ; http.connected() && (totalLen<0 || byteCnt<totalLen) ; )
   {

@@ -26,7 +26,7 @@
 // at first time to RESET the preferences.
 //
 
-int bandIdx = 0;
+volatile int bandIdx = 0;
 
 // Band limits are expanded to align with the nearest tuning scale mark
 // Do not forget to update the bands table in the manual.md
@@ -143,6 +143,7 @@ int getTotalModes() { return(ITEM_COUNT(bandModeDesc)); }
 
 uint8_t memoryIdx = 0;
 Memory memories[MEMORY_COUNT];
+portMUX_TYPE memoriesMux = portMUX_INITIALIZER_UNLOCKED;
 Memory newMemory;
 
 int getTotalMemories() { return(ITEM_COUNT(memories)); }

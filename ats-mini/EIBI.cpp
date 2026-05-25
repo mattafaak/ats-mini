@@ -348,7 +348,7 @@ char replace_accented_char(char c)
 
 static bool eibiParseLine(const char *line, StationSchedule &entry)
 {
-  char nameStr[sizeof(entry.name) + 1];
+  char nameStr[25];  // 24 data bytes + null terminator (%24c field)
   char freqStr[15] = {0};
   char timeStr[10] = {0};
   char tmpCol[12]  = {0};

@@ -2,12 +2,21 @@
 #include "BleUartPeripheral.h"
 #include <host/ble_hs.h>
 #include "Remote.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
+// Guards rxBuf and txBuf against concurrent access from NimBLE host task
+// and main loop (dual-core ESP32-S3).
+static portMUX_TYPE bufMux = portMUX_INITIALIZER_UNLOCKED;
 
 bool BleUartPeripheral::consumeAbortPending()
 {
   bool pending = BleBase::consumeAbortFlag(abortPending);
-  if (pending)
+  if (pending) {
+    portENTER_CRITICAL(&bufMux);
     rxBuf.flush();
+    portEXIT_CRITICAL(&bufMux);
+  }
   return pending;
 }
 
@@ -67,15 +76,17 @@ size_t BleUartPeripheral::pumpTx()
 
   if (txPendingLen == 0)
   {
-    if (txBuf.empty()) return 0;
+    portENTER_CRITICAL(&bufMux);
+    if (txBuf.empty()) { portEXIT_CRITICAL(&bufMux); return 0; }
 
     size_t chunkSize = txPayloadSize();
     size_t availableByteCount = txBuf.available();
     if (availableByteCount < chunkSize)
       chunkSize = availableByteCount;
-    if (chunkSize == 0) return 0;
+    if (chunkSize == 0) { portEXIT_CRITICAL(&bufMux); return 0; }
 
     txPendingLen = txBuf.read((char*)txChunk, chunkSize);
+    portEXIT_CRITICAL(&bufMux);
     if (txPendingLen == 0) return 0;
   }
   txCh->setValue(txChunk, txPendingLen);
@@ -96,7 +107,9 @@ void BleUartPeripheral::resetTxSession()
 {
   abortPending = false;
   clearPendingTx();
+  portENTER_CRITICAL(&bufMux);
   txBuf.flush();
+  portEXIT_CRITICAL(&bufMux);
   txConnHandle = BLE_HS_CONN_HANDLE_NONE;
   txPeerMtu = BLE_MIN_MTU;
   txSubscribed = false;
@@ -127,7 +140,9 @@ void BleUartPeripheral::destroyServices()
 {
   resetTxSession();
   abortPending = false;
+  portENTER_CRITICAL(&bufMux);
   rxBuf.flush();
+  portEXIT_CRITICAL(&bufMux);
 }
 
 void BleUartPeripheral::configureAdvertising(BLEAdvertising& advertising)
@@ -150,7 +165,9 @@ void BleUartPeripheral::onDisconnect(BLEServer* server, ble_gap_conn_desc* desc)
   if (desc->conn_handle == txConnHandle)
     resetTxSession();
 
+  portENTER_CRITICAL(&bufMux);
   rxBuf.flush();
+  portEXIT_CRITICAL(&bufMux);
   BlePeripheral::onDisconnect(server, desc);
 }
 
@@ -161,11 +178,13 @@ void BleUartPeripheral::onWrite(BLECharacteristic* characteristic, ble_gap_conn_
   uint8_t* data = characteristic->getData();
   size_t byteCount = characteristic->getLength();
   abortPending |= byteCount > 0;
+  portENTER_CRITICAL(&bufMux);
   size_t room = rxBuf.room();
   if (byteCount > room)
     byteCount = room;
   if ((data != nullptr) && (byteCount > 0))
     rxBuf.write((const char*)data, byteCount);
+  portEXIT_CRITICAL(&bufMux);
 }
 
 void BleUartPeripheral::onSubscribe(BLECharacteristic* characteristic, ble_gap_conn_desc* desc, uint16_t subValue)
@@ -187,7 +206,9 @@ void BleUartPeripheral::onSubscribe(BLECharacteristic* characteristic, ble_gap_c
   else
   {
     clearPendingTx();
+    portENTER_CRITICAL(&bufMux);
     txBuf.flush();
+    portEXIT_CRITICAL(&bufMux);
   }
 }
 
@@ -215,7 +236,9 @@ void BleUartPeripheral::onStatus(BLECharacteristic* characteristic, Status statu
 
     case ERROR_NO_SUBSCRIBER:
       clearPendingTx();
+      portENTER_CRITICAL(&bufMux);
       txBuf.flush();
+      portEXIT_CRITICAL(&bufMux);
       txSubscribed = false;
       break;
 
@@ -229,7 +252,9 @@ void BleUartPeripheral::onStatus(BLECharacteristic* characteristic, Status statu
         break;
       }
       clearPendingTx();
+      portENTER_CRITICAL(&bufMux);
       txBuf.flush();
+      portEXIT_CRITICAL(&bufMux);
       break;
 
     default:
@@ -240,19 +265,27 @@ void BleUartPeripheral::onStatus(BLECharacteristic* characteristic, Status statu
 int BleUartPeripheral::available()
 {
   pumpTx();
-  return rxBuf.available();
+  portENTER_CRITICAL(&bufMux);
+  int result = rxBuf.available();
+  portEXIT_CRITICAL(&bufMux);
+  return result;
 }
 
 int BleUartPeripheral::peek()
 {
   pumpTx();
-  return rxBuf.peek();
+  portENTER_CRITICAL(&bufMux);
+  int result = rxBuf.peek();
+  portEXIT_CRITICAL(&bufMux);
+  return result;
 }
 
 int BleUartPeripheral::read()
 {
   pumpTx();
+  portENTER_CRITICAL(&bufMux);
   int value = rxBuf.read();
+  portEXIT_CRITICAL(&bufMux);
   if (value >= 0)
     abortPending = false;
   return value;
@@ -260,11 +293,18 @@ int BleUartPeripheral::read()
 
 void BleUartPeripheral::flush()
 {
-  while (!txBuf.empty() || (txPendingLen > 0))
+  uint32_t start = millis();
+  while (true)
   {
+    portENTER_CRITICAL(&bufMux);
+    bool empty = txBuf.empty() && (txPendingLen == 0);
+    portEXIT_CRITICAL(&bufMux);
+    if (empty) break;
     if (!canSend()) break;
-    if (pumpTx() == 0)
+    if (pumpTx() == 0) {
+      if ((millis() - start) > 500) break;
       delay(1);
+    }
   }
 }
 
@@ -277,8 +317,10 @@ size_t BleUartPeripheral::write(const uint8_t* data, size_t size)
   {
     pumpTx();
 
+    portENTER_CRITICAL(&bufMux);
     bool wasEmpty = txBuf.empty();
     size_t queuedByteCount = txBuf.write((const char*)data + writtenByteCount, size - writtenByteCount);
+    portEXIT_CRITICAL(&bufMux);
     writtenByteCount += queuedByteCount;
     if ((queuedByteCount > 0) && wasEmpty && (txPendingLen == 0) && (txNotifyState == BleUartTxNotifyState::Idle))
     {

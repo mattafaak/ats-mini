@@ -16,9 +16,10 @@
 #define SCAN_POLL_TIME    10 // Tuning status polling interval (msecs)
 #define SCAN_POINTS      200 // Number of frequencies to scan
 
-#define SCAN_OFF    0   // Scanner off, no data
-#define SCAN_RUN    1   // Scanner running
-#define SCAN_DONE   2   // Scanner done, valid data in scanData[]
+// Waterfall scan state (distinct from SCAN_IDLE/RUNNING/DONE in Scan.h)
+#define WSCAN_OFF   0
+#define WSCAN_RUN   1
+#define WSCAN_DONE  2
 
 static struct
 {
@@ -27,7 +28,7 @@ static struct
 } scanData[SCAN_POINTS];
 
 static uint32_t scanTime = millis();
-static uint8_t  scanState = SCAN_OFF;
+static uint8_t  scanState = WSCAN_OFF;
 
 static uint16_t scanStartFreq;
 static uint16_t scanStep;
@@ -52,6 +53,46 @@ static int candidateDesc(const void *a, const void *b) {
 
 ScanStatus scanStatus = {0};
 
+portMUX_TYPE scanStatusMux = portMUX_INITIALIZER_UNLOCKED;
+
+// --- Async auto-scan state machine ---
+// Splits scanToMemoryAuto() into tick-driven steps so the web handler
+// never blocks for more than a few microseconds.
+#define AUTO_PHASE_IDLE    0
+#define AUTO_PHASE_SWEEP   1
+#define AUTO_PHASE_PROCESS 2
+
+typedef struct {
+  uint8_t phase;           // AUTO_PHASE_*
+  uint8_t count;           // target result count (clamped 1-20)
+  Candidate *candidates;   // heap-allocated array (NULL when idle, freed on completion)
+  uint16_t candidateCount;
+  uint16_t freq;           // current sweep frequency
+  uint16_t step;           // frequency step
+  uint16_t totalSteps;     // for progress pct
+  uint16_t stepCount;      // steps completed in current sweep
+  uint16_t minFreq;        // band minimum
+  uint16_t maxFreq;        // band maximum
+  uint8_t slot;            // next empty memory slot for Phase 2
+  uint8_t written;         // results saved in Phase 2
+  uint16_t origFreq;       // restore values
+  int origBfo;
+  uint32_t settleStart;    // timestamp for 80ms settling
+  uint32_t rdsStart;       // timestamp for RDS dwell
+  bool settled;            // true once settle time has passed
+  bool identified;         // true once station name obtained
+  char nameBuf[12];        // station name buffer for Phase 2
+} AutoScanState;
+
+static AutoScanState autoScan = {0};
+
+void scanCopyStatus(ScanStatus *dst)
+{
+  portENTER_CRITICAL(&scanStatusMux);
+  memcpy(dst, &scanStatus, sizeof(ScanStatus));
+  portEXIT_CRITICAL(&scanStatusMux);
+}
+
 float scanGetRSSI(uint16_t freq)
 {
   // Input frequency must be in range of existing data
@@ -74,13 +115,14 @@ float scanGetSNR(uint16_t freq)
 
 static void scanInit(uint16_t centerFreq, uint16_t step)
 {
+  if (step < 1) step = 1;
   scanStep    = step;
   scanCount   = 0;
   scanMinRSSI = 255;
   scanMaxRSSI = 0;
   scanMinSNR  = 255;
   scanMaxSNR  = 0;
-  scanState  = SCAN_RUN;
+  scanState  = WSCAN_RUN;
   scanTime    = millis();
 
   const Band *band = getCurrentBand();
@@ -100,7 +142,7 @@ static void scanInit(uint16_t centerFreq, uint16_t step)
 static bool scanTickTime()
 {
   // Scan must be on
-  if((scanState!=SCAN_RUN) || (scanCount>=SCAN_POINTS)) return(false);
+  if((scanState!=WSCAN_RUN) || (scanCount>=SCAN_POINTS)) return(false);
 
   // Wait for the right time
   if(millis() - scanTime < SCAN_POLL_TIME) return(true);
@@ -148,7 +190,7 @@ static bool scanTickTime()
   scanTime = millis() - SCAN_POLL_TIME;
 
   // Return current scan status
-  return(scanState==SCAN_RUN);
+  return(scanState==WSCAN_RUN);
 }
 
 //
@@ -342,7 +384,10 @@ void scanManualStep() {
 void scanBookmark() {
   if (scanStatus.running != SCAN_RUNNING || scanStatus.mode != 1) return;
   if (scanStatus.bookmarkCount >= 20) return;
-  scanStatus.bookmarks[scanStatus.bookmarkCount++] = scanStatus.currentFreq;
+  int i = scanStatus.bookmarkCount;
+  scanStatus.bookmarks[i] = scanStatus.currentFreq;
+  scanStatus.bookmarkRSSI[i] = radioState.rssi;
+  scanStatus.bookmarkCount++;
 }
 
 void scanStop() {
@@ -354,14 +399,16 @@ void scanStop() {
     if (memories[i].freq == 0) { slot = i; break; }
   }
 
-  Band *band = getCurrentBand();
   uint16_t origFreq = radioState.frequency;
   int origBfo = radioState.bfo;
   uint8_t written = 0;
 
   audioTempMute(true);
 
-  for (int i = 0; i < scanStatus.bookmarkCount && slot < MEMORY_COUNT; i++, slot++) {
+  for (int i = 0; i < scanStatus.bookmarkCount && written < MEMORY_COUNT; i++) {
+    // Find the next empty slot (there may be gaps)
+    while (slot < MEMORY_COUNT && memories[slot].freq != 0) slot++;
+    if (slot >= MEMORY_COUNT) break;
     uint16_t freq = scanStatus.bookmarks[i];
     if (isSSB()) updateBFO(0, true);
     if (!updateFrequency(freq, false)) continue;
@@ -391,7 +438,7 @@ void scanStop() {
 
     scanStatus.results[written].slot = slot + 1;
     scanStatus.results[written].freq = freq;
-    scanStatus.results[written].rssi = scanStatus.currentRSSI;
+    scanStatus.results[written].rssi = scanStatus.bookmarkRSSI[i];
     strlcpy(scanStatus.results[written].name, name, 12);
     written++;
   }
@@ -403,6 +450,220 @@ void scanStop() {
   audioTempMute(false);
   clearStationInfo();
   identifyFrequency(getEffectiveFreq());
+}
+
+// --- Async auto-scan implementation ---
+
+static void autoCleanup()
+{
+  if (autoScan.candidates) {
+    heap_caps_free(autoScan.candidates);
+    autoScan.candidates = NULL;
+  }
+  autoScan.phase = AUTO_PHASE_IDLE;
+}
+
+void scanRequestAuto(uint8_t count)
+{
+  if (count > 20) count = 20;
+  if (count == 0) count = 10;
+  if (autoScan.phase != AUTO_PHASE_IDLE) return;
+
+  Band *band = getCurrentBand();
+  uint16_t step = getCurrentStep()->step;
+  if (radioState.mode != FM && step < 5) step = 5;
+
+  Candidate *cands = (Candidate *)heap_caps_malloc(
+    sizeof(Candidate) * MAX_STEP_CANDIDATES, MALLOC_CAP_8BIT);
+  if (!cands) return;
+
+  memset(&autoScan, 0, sizeof(autoScan));
+  autoScan.candidates = cands;
+  autoScan.count = count;
+  autoScan.freq = band->minimumFreq;
+  autoScan.step = step;
+  autoScan.totalSteps = ((band->maximumFreq - band->minimumFreq) / step) + 1;
+  if (autoScan.totalSteps > MAX_STEP_CANDIDATES)
+    autoScan.totalSteps = MAX_STEP_CANDIDATES;
+  autoScan.minFreq = band->minimumFreq;
+  autoScan.maxFreq = band->maximumFreq;
+  autoScan.origFreq = radioState.frequency;
+  autoScan.origBfo = radioState.bfo;
+  autoScan.phase = AUTO_PHASE_SWEEP;
+
+  portENTER_CRITICAL(&scanStatusMux);
+  memset(&scanStatus, 0, sizeof(scanStatus));
+  scanStatus.running = SCAN_RUNNING;
+  scanStatus.mode = 0;
+  portEXIT_CRITICAL(&scanStatusMux);
+
+  audioTempMute(true);
+  seekStop = false;
+  if (isSSB()) updateBFO(0, true);
+}
+
+void scanProcessTick()
+{
+  if (autoScan.phase == AUTO_PHASE_IDLE) return;
+
+  // Check abort
+  if (consumeAbortPending() || seekStop) {
+    goto doAbort;
+  }
+
+  // Yield to FreeRTOS watchdog
+  delay(1);
+
+  if (autoScan.phase == AUTO_PHASE_SWEEP) {
+    // First call for this freq: tune and start settle timer
+    if (!autoScan.settled) {
+      if (isSSB()) updateBFO(0, true);
+      if (updateFrequency(autoScan.freq, false)) {
+        autoScan.settleStart = millis();
+        autoScan.settled = true;
+      }
+      return;
+    }
+
+    // Wait for 80ms settling
+    if (millis() - autoScan.settleStart < 80)
+      return;
+
+    // Measure RSSI/SNR
+    rx.getCurrentReceivedSignalQuality();
+    if (autoScan.candidateCount < MAX_STEP_CANDIDATES) {
+      autoScan.candidates[autoScan.candidateCount].freq = autoScan.freq;
+      autoScan.candidates[autoScan.candidateCount].rssi = rx.getCurrentRSSI();
+      autoScan.candidateCount++;
+    }
+
+    portENTER_CRITICAL(&scanStatusMux);
+    scanStatus.currentFreq = autoScan.freq;
+    scanStatus.currentRSSI = rx.getCurrentRSSI();
+    scanStatus.currentSNR = rx.getCurrentSNR();
+    scanStatus.progress = (uint8_t)((uint32_t)autoScan.stepCount * 50 / autoScan.totalSteps);
+    portEXIT_CRITICAL(&scanStatusMux);
+
+    // Advance to next frequency
+    autoScan.freq += autoScan.step;
+    autoScan.stepCount++;
+    autoScan.settled = false;
+
+    // Check if sweep complete
+    if (autoScan.freq > autoScan.maxFreq || autoScan.stepCount >= MAX_STEP_CANDIDATES) {
+      qsort(autoScan.candidates, autoScan.candidateCount, sizeof(Candidate), candidateDesc);
+
+      // Find first empty memory slot
+      for (int i = 0; i < MEMORY_COUNT; i++) {
+        if (memories[i].freq == 0) { autoScan.slot = i; break; }
+      }
+
+      autoScan.phase = AUTO_PHASE_PROCESS;
+      autoScan.settled = false;
+    }
+    return;
+  }
+
+  if (autoScan.phase == AUTO_PHASE_PROCESS) {
+    // Process each candidate one per tick
+    while (autoScan.written < autoScan.count && autoScan.slot < MEMORY_COUNT) {
+      Candidate *c = &autoScan.candidates[autoScan.written];
+      if (c->rssi == 0) { autoScan.written++; continue; }
+
+      // First call for this candidate: tune and settle
+      if (!autoScan.settled) {
+        if (isSSB()) updateBFO(0, true);
+        updateFrequency(c->freq, false);
+        autoScan.settleStart = millis();
+        autoScan.settled = true;
+        autoScan.rdsStart = 0;
+        autoScan.identified = false;
+        autoScan.nameBuf[0] = '\0';
+        return;
+      }
+
+      // Wait for settling
+      if (millis() - autoScan.settleStart < 80)
+        return;
+
+      // Station identification
+      if (!autoScan.identified) {
+        if (radioState.mode == FM) {
+          if (autoScan.rdsStart == 0) {
+            clearStationInfo();
+            autoScan.rdsStart = millis();
+          }
+          checkRds();
+          const char *n = getStationName();
+          if (n && n[0] && n[0] != '*') {
+            strlcpy(autoScan.nameBuf, n, sizeof(autoScan.nameBuf));
+            autoScan.identified = true;
+          } else if (millis() - autoScan.rdsStart > 1500) {
+            autoScan.identified = true; // timeout, name stays empty
+          } else {
+            return; // Next tick checks RDS again
+          }
+        } else {
+          identifyFrequency(c->freq, false);
+          const char *n = getStationName();
+          if (n && n[0] && n[0] != '*')
+            strlcpy(autoScan.nameBuf, n, sizeof(autoScan.nameBuf));
+          autoScan.identified = true;
+        }
+        if (!autoScan.identified) return;
+      }
+
+      // Save to memory
+      uint32_t fHz = (uint32_t)c->freq * 1000;
+      memories[autoScan.slot].freq = fHz;
+      memories[autoScan.slot].band = bandIdx;
+      memories[autoScan.slot].mode = radioState.mode;
+      strlcpy(memories[autoScan.slot].name, autoScan.nameBuf, sizeof(memories[autoScan.slot].name));
+      prefsSaveMemory(autoScan.slot, true);
+
+      portENTER_CRITICAL(&scanStatusMux);
+      scanStatus.results[autoScan.written].slot = autoScan.slot + 1;
+      scanStatus.results[autoScan.written].freq = c->freq;
+      scanStatus.results[autoScan.written].rssi = c->rssi;
+      strlcpy(scanStatus.results[autoScan.written].name, autoScan.nameBuf, 12);
+      scanStatus.progress = (uint8_t)(50 + (uint32_t)autoScan.written * 50 / autoScan.count);
+      portEXIT_CRITICAL(&scanStatusMux);
+
+      autoScan.written++;
+      autoScan.slot++;
+      autoScan.settled = false;
+      autoScan.identified = false;
+    }
+
+    // All candidates processed
+    goto doFinish;
+  }
+
+  return;
+
+doAbort:
+  audioTempMute(false);
+  updateFrequency(autoScan.origFreq, false);
+  if (isSSB()) updateBFO(autoScan.origBfo, false);
+  clearStationInfo();
+  identifyFrequency(getEffectiveFreq());
+  portENTER_CRITICAL(&scanStatusMux);
+  scanStatus.running = SCAN_ABORTED;
+  portEXIT_CRITICAL(&scanStatusMux);
+  autoCleanup();
+  return;
+
+doFinish:
+  audioTempMute(false);
+  updateFrequency(autoScan.origFreq, false);
+  if (isSSB()) updateBFO(autoScan.origBfo, false);
+  clearStationInfo();
+  identifyFrequency(getEffectiveFreq());
+  portENTER_CRITICAL(&scanStatusMux);
+  scanStatus.running = SCAN_DONE;
+  scanStatus.resultCount = autoScan.written;
+  portEXIT_CRITICAL(&scanStatusMux);
+  autoCleanup();
 }
 
 void scanAbort() {

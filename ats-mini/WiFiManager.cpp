@@ -51,11 +51,16 @@ void netTickTime()
   }
 
   // Reconnection watchdog: if WiFi was previously connected but
-  // is now disconnected, trigger a reconnection attempt.
+  // is now disconnected, reconnect immediately (no 3s delay).
+  // Minimum 10s between automatic reconnect attempts to avoid loops.
   static bool wasConnected = false;
+  static uint32_t lastReconnect = 0;
   int8_t status = getWiFiStatus();
-  if(wasConnected && status == -1) {
-    netRequestConnect();
+  if(wasConnected && status == -1 && (millis() - lastReconnect) > 10000) {
+    wifiInitConnection(radioState.wifiMode, false);
+    lastReconnect = millis();
+    connectTime = millis();
+    itIsTimeToWiFi = false;
   }
   wasConnected = (status >= 1);
 }

@@ -176,7 +176,7 @@ BleCentral::ConnectResult BleCentral::connectToPeer()
 
   if (!setupConnectedPeer())
   {
-    if (client_->disconnect() != 0 && !client_->isConnected())
+    if (!client_->disconnect() && !client_->isConnected())
       return ConnectResult::RetryScan;
     return ConnectResult::WaitForDisconnect;
   }

@@ -10,6 +10,7 @@ dependencies = [
   "furo",
   "myst_parser",
   "sphinx-autobuild",
+  "pyserial>=3.5",
 ]
 
 [tool.uv]

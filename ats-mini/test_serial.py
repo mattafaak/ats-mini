@@ -65,6 +65,28 @@ def send_and_wait(ser, cmd, wait, poll_step=0.5):
         time.sleep(poll_step)
     return out.decode(errors="replace")
 
+def set_volume(ser, target):
+    """Set volume to target (0-63) using V/v serial commands."""
+    s = get_status(ser)
+    if not s:
+        return
+    diff = target - s["vol"]
+    if diff > 0:
+        for _ in range(min(diff, 63)):
+            ser.write(b"V")
+            time.sleep(0.02)
+    elif diff < 0:
+        for _ in range(min(-diff, 63)):
+            ser.write(b"v")
+            time.sleep(0.02)
+    time.sleep(0.3)
+
+
+def mute(ser):
+    """Mute device (set volume to 0)."""
+    set_volume(ser, 0)
+
+
 def _get_status_once(ser, timeout=2.0):
     """Send ? and parse CSV status with timeout (single attempt)."""
     ser.write(b"?\r\n")
@@ -176,6 +198,7 @@ section("Setting known test state")
 # or use the F/K command to get to a known frequency
 def find_am_band(ser):
     """Cycle bands until we find one that supports AM."""
+    mute(ser)
     for _ in range(20):
         s = get_status(ser)
         if s and s["mode"] == "AM":
@@ -186,7 +209,7 @@ def find_am_band(ser):
 
 s = find_am_band(ser)
 if s and s["mode"] != "AM":
-    # Try switching mode to AM
+    # Try switching mode to AM (already muted from find_am_band)
     for _ in range(5):
         send_cmd(ser, "M")
         s = get_status(ser)
@@ -218,6 +241,42 @@ def test_volume_up_down():
 
 test("Volume up/down", test_volume_up_down)
 
+def test_volume_quiet_freq():
+    """Volume adjustment on a quiet (low-RSSI) frequency produces no audio."""
+    s = get_status(ser)
+    if not s: raise Exception("No status")
+    orig_freq = s["freq_khz"]
+    # Find a quiet spot: go to band minimum + 10 kHz (often unoccupied)
+    band_min = max(150, orig_freq - 500)
+    target = max(150, band_min)
+    # Tune away from active stations
+    resp = send_cmd_nl(ser, f"K{target}", wait=0.5)
+    time.sleep(0.5)
+    s = get_status(ser)
+    if not s:
+        # Return to original and bail
+        send_cmd_nl(ser, f"K{orig_freq}", wait=0.5)
+        return
+    quiet_freq = s["freq_khz"]
+    # Now at quiet frequency — test volume works
+    mute(ser)
+    time.sleep(0.3)
+    s = get_status(ser)
+    assert s and s["vol"] == 0, f"Volume not zero after mute: {s}"
+    # Bring volume back up partway
+    set_volume(ser, 20)
+    s = get_status(ser)
+    assert s and s["vol"] == 20, f"Volume not 20: {s}"
+    # Back to zero
+    set_volume(ser, 0)
+    s = get_status(ser)
+    assert s and s["vol"] == 0, f"Volume not 0: {s}"
+    # Restore original frequency
+    send_cmd_nl(ser, f"K{orig_freq}", wait=0.5)
+    print(f"  Volume OK on quiet freq {quiet_freq}kHz")
+
+test("Volume on quiet frequency", test_volume_quiet_freq)
+
 def _retry_status(ser, retries=5, delay=0.3):
     """Get status with retries, shorter timeout per attempt."""
     for _ in range(retries):
@@ -228,6 +287,7 @@ def _retry_status(ser, retries=5, delay=0.3):
 
 def test_mode_cycle():
     """M/m changes mode (direction only, exact count depends on band)."""
+    mute(ser)
     s = _retry_status(ser)
     if not s: raise Exception("No status")
     mode_before = s["mode"]
@@ -244,6 +304,7 @@ test("Mode cycle forward/back", test_mode_cycle)
 
 def test_step_cycle():
     """S/s changes step."""
+    mute(ser)
     s = get_status(ser)
     if not s: raise Exception("No status")
     step_before = s["step"]
@@ -260,6 +321,7 @@ test("Step cycle", test_step_cycle)
 
 def test_bandwidth_cycle():
     """W/w changes bandwidth."""
+    mute(ser)
     s = get_status(ser)
     if not s: raise Exception("No status")
     bw_before = s["bw"]
@@ -276,6 +338,7 @@ test("Bandwidth cycle", test_bandwidth_cycle)
 
 def test_band_cycle():
     """B/b cycles through bands."""
+    mute(ser)
     s = get_status(ser)
     if not s: raise Exception("No status")
     band_before = s["band"]
@@ -320,6 +383,7 @@ section("2C-5: Frequency Entry")
 
 def test_freq_entry_F():
     """F<Hz> tunes within current band."""
+    mute(ser)
     s = get_status(ser)
     target_hz = (s["freq_khz"] + 100) * 1000  # +100kHz within band
     resp = send_cmd_nl(ser, f"F{target_hz}", wait=1.0)
@@ -333,6 +397,7 @@ test("F<Hz> frequency entry", test_freq_entry_F)
 
 def test_freq_entry_K():
     """K<kHz> tunes within current band."""
+    mute(ser)
     s = get_status(ser)
     target_khz = s["freq_khz"] - 50
     if target_khz <= 0: target_khz = s["freq_khz"] + 50
@@ -378,6 +443,7 @@ test("Sleep on/off", test_sleep)
 
 def test_calibration():
     """I/i changes cal (only effective in SSB mode)."""
+    mute(ser)
     # Switch to USB mode first
     s = get_status(ser)
     # Cycle M to find USB if not already
@@ -480,6 +546,7 @@ test("? status query", test_status_query)
 
 def test_seek():
     """>/< seek commands."""
+    mute(ser)
     s = get_status(ser)
     freq_before = s["freq_khz"] if s else 0
     # Seek up — give it time
@@ -499,6 +566,7 @@ test("> seek up (no crash)", test_seek)
 
 def test_seek_down():
     """< seek down."""
+    mute(ser)
     s = get_status(ser)
     freq_before = s["freq_khz"] if s else 0
     send_cmd(ser, "<")
@@ -514,6 +582,7 @@ test("< seek down (no crash)", test_seek_down)
 
 def test_scanner():
     """Z band scan."""
+    mute(ser)
     # Narrow band for quick scan
     s = get_status(ser)
     print(f"  Scanning band: {s['band']} ({s['freq_khz']}kHz {s['mode']})")
@@ -558,6 +627,7 @@ section("Abort/Timeout")
 
 def test_abort_scan():
     """Any character during scan aborts it."""
+    mute(ser)
     ser.write(b"Z\n")
     time.sleep(0.5)
     ser.write(b"x")  # abort
@@ -644,6 +714,9 @@ def test_web_api():
         return
     host = f"http://{ip}"
 
+    # Mute before tuning/band changes
+    _curl("POST", f"{host}/api/command", "cmd=mute&value=true", timeout=5)
+
     # /api/status
     status, body = _curl("GET", f"{host}/api/status")
     assert status == 200, f"HTTP {status}: {body[:100]}"
@@ -720,6 +793,8 @@ test("Web API endpoints", test_web_api)
 def test_web_api_tune_valid():
     ip = get_web_ip()
     if not ip: return
+    # Mute before tuning
+    _curl("POST", f"http://{ip}/api/command", "cmd=mute&value=true", timeout=5)
     s = get_status(ser)
     if not s:
         print("  SKIP: no status")
@@ -745,6 +820,8 @@ def test_web_api_tune_out_of_band():
 def test_web_api_volume():
     ip = get_web_ip()
     if not ip: return
+    # Mute first, then test each volume level
+    _curl("POST", f"http://{ip}/api/command", "cmd=mute&value=true", timeout=5)
     for vol in [0, 30, 63]:
         code, body = _curl("POST", f"http://{ip}/api/command", data=f"cmd=volume&value={vol}", timeout=10)
         assert code == 200
@@ -768,6 +845,8 @@ def test_web_api_mute():
 def test_web_api_band():
     ip = get_web_ip()
     if not ip: return
+    # Mute before band change
+    _curl("POST", f"http://{ip}/api/command", "cmd=mute&value=true", timeout=5)
     s = get_status(ser)
     assert s
     orig = s["band"]
@@ -781,6 +860,8 @@ def test_web_api_band():
 def test_web_api_seek():
     ip = get_web_ip()
     if not ip: return
+    # Mute before seek
+    _curl("POST", f"http://{ip}/api/command", "cmd=mute&value=true", timeout=5)
     s = get_status(ser)
     if not s: return
     band = s.get("band", "")
@@ -844,6 +925,8 @@ def test_web_api_theme_set():
 def test_scan_auto():
     ip = get_web_ip()
     if not ip: return
+    # Mute before scan
+    _curl("POST", f"http://{ip}/api/command", "cmd=mute&value=true", timeout=5)
     s = get_status(ser)
     if not s: return
     band = s.get("band", "")
@@ -983,6 +1066,13 @@ def restore_initial(ser, saved):
     # Restore frequency via K command
     send_cmd_nl(ser, f"K{saved['freq_khz']}", wait=0.5)
     time.sleep(0.5)
+    # Unmute via web API if available
+    try:
+        ip = get_web_ip()
+        if ip:
+            _curl("POST", f"http://{ip}/api/command", "cmd=mute&value=false", timeout=5)
+    except:
+        pass
     # Restore volume by cycling
     s = get_status(ser)
     if s:

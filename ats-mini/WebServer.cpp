@@ -61,6 +61,19 @@ static void jsonColor(String &json, const char *key, uint16_t color) {
   json += buf;
 }
 
+// Escape a string for embedding in JSON (handles " and \)
+static String jsonEscape(const String &s) {
+  String r;
+  for (unsigned int i = 0; i < s.length(); i++) {
+    char c = s.charAt(i);
+    if (c == '"') r += "\\\"";
+    else if (c == '\\') r += "\\\\";
+    else if (c < ' ') r += ' ';
+    else r += c;
+  }
+  return r;
+}
+
 //
 // Initialize internal web server
 //
@@ -143,8 +156,8 @@ void webInit()
     json += "\"wifi_mode\":\"" + wifiStatusStr + "\",";
     json += "\"wifi_rssi\":" + String(ws == 2 ? WiFi.RSSI() : 0) + ",";
     json += "\"ip_address\":\"" + String(getWiFiIPAddress()) + "\",";
-    json += "\"station_name\":\"" + String(getStationName()) + "\",";
-    json += "\"program_info\":\"" + String(getProgramInfo()) + "\",";
+    json += "\"station_name\":\"" + jsonEscape(String(getStationName())) + "\",";
+    json += "\"program_info\":\"" + jsonEscape(String(getProgramInfo())) + "\",";
     json += "\"rssi\":" + String(radioState.rssi) + ",";
     json += "\"snr\":" + String(radioState.snr) + ",";
     json += String("\"main_muted\":") + (audioIsMainMuted() ? "true" : "false") + ",";
@@ -165,12 +178,12 @@ void webInit()
     String value = request->arg("value");
 
     if (cmd == "tune") {
-      long int freqKhz = value.toInt();
-      if (freqKhz <= 0) {
+      uint32_t freqKhz = value.toInt();
+      if (freqKhz <= 0 || freqKhz > 30000) {
         request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Bad frequency\"}");
         return;
       }
-      long int freqHz = freqKhz * 1000;
+      uint32_t freqHz = (uint32_t)freqKhz * 1000;
       Band *band = getCurrentBand();
       uint16_t targetFreq = freqFromHz(freqHz, radioState.mode);
       int targetBfo = isSSB() ? bfoFromHz(freqHz) : 0;
@@ -367,6 +380,9 @@ void webInit()
 
   // Theme API — GET returns current theme JSON, POST changes theme by idx
   server.on("/api/theme", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if(loginUsername != "" && loginPassword != "")
+      if(!request->authenticate(loginUsername.c_str(), loginPassword.c_str()))
+        return request->requestAuthentication();
     String json = "{";
     json += "\"idx\":" + String(themeIdx) + ",";
     json += "\"name\":\"" + String(TH.name) + "\",";
@@ -407,30 +423,33 @@ void webInit()
 
   // Scan-to-memory API
   server.on("/api/scan", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if(loginUsername != "" && loginPassword != "")
+      if(!request->authenticate(loginUsername.c_str(), loginPassword.c_str()))
+        return request->requestAuthentication();
     String cmd = request->arg("cmd");
 
     // Status poll — non-blocking, returns JSON
     if (cmd == "status" || cmd == "poll") {
-      const ScanStatus *s = scanGetStatus();
+      ScanStatus s; scanCopyStatus(&s);
       String json = "{";
-      json += "\"running\":" + String(s->running) + ",";
-      json += "\"mode\":" + String(s->mode) + ",";
-      json += "\"current_freq\":" + String(s->currentFreq) + ",";
-      json += "\"current_rssi\":" + String(s->currentRSSI) + ",";
-      json += "\"current_snr\":" + String(s->currentSNR) + ",";
-      json += "\"progress_pct\":" + String(s->progress) + ",";
-      json += "\"bookmark_count\":" + String(s->bookmarkCount) + ",\"bookmarks\":[";
-      for (int i = 0; i < s->bookmarkCount; i++) {
+      json += "\"running\":" + String(s.running) + ",";
+      json += "\"mode\":" + String(s.mode) + ",";
+      json += "\"current_freq\":" + String(s.currentFreq) + ",";
+      json += "\"current_rssi\":" + String(s.currentRSSI) + ",";
+      json += "\"current_snr\":" + String(s.currentSNR) + ",";
+      json += "\"progress_pct\":" + String(s.progress) + ",";
+      json += "\"bookmark_count\":" + String(s.bookmarkCount) + ",\"bookmarks\":[";
+      for (int i = 0; i < s.bookmarkCount; i++) {
         if (i) json += ",";
-        json += String(s->bookmarks[i]);
+        json += String(s.bookmarks[i]);
       }
-      json += "],\"result_count\":" + String(s->resultCount) + ",\"results\":[";
-      for (int i = 0; i < s->resultCount; i++) {
+      json += "],\"result_count\":" + String(s.resultCount) + ",\"results\":[";
+      for (int i = 0; i < s.resultCount; i++) {
         if (i) json += ",";
-        json += "{\"slot\":" + String(s->results[i].slot) +
-                ",\"freq\":" + String(s->results[i].freq) +
-                ",\"rssi\":" + String(s->results[i].rssi) +
-                ",\"name\":\"" + String(s->results[i].name) + "\"}";
+        json += "{\"slot\":" + String(s.results[i].slot) +
+                ",\"freq\":" + String(s.results[i].freq) +
+                ",\"rssi\":" + String(s.results[i].rssi) +
+                ",\"name\":\"" + jsonEscape(String(s.results[i].name)) + "\"}";
       }
       json += "]}";
       request->send(200, "application/json", json);
@@ -446,7 +465,7 @@ void webInit()
       String mode = request->arg("mode");
       if (mode == "auto") {
         int n = constrain(request->arg("n").toInt(), 1, 20);
-        scanToMemoryAuto(n);
+        scanRequestAuto(n);
         request->send(200, "application/json", "{\"status\":\"ok\"}");
       } else if (mode == "manual") {
         scanToMemoryManual();
@@ -767,7 +786,8 @@ static const String webScanPage()
 
 static const String webUtcOffsetSelector()
 {
-  String result = "";
+  String result;
+  result.reserve(1024);
 
   for(int i=0 ; i<getTotalUTCOffsets(); i++)
   {
@@ -787,7 +807,8 @@ static const String webUtcOffsetSelector()
 
 static const String webThemeSelector()
 {
-  String result = "";
+  String result;
+  result.reserve(1024);
 
   for(int i=0 ; i<getTotalThemes(); i++)
   {

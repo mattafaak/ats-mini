@@ -19,6 +19,7 @@
 #include "EventHandler.h"
 #include "Scheduler.h"
 #include "Tuning.h"
+#include "Scan.h"
 
 RadioState radioState = {0};
 
@@ -308,6 +309,9 @@ void loop()
 
   // Run periodic housekeeping tasks
   needRedraw |= runScheduler(currentTime);
+
+  // Scan-to-memory tick (non-blocking auto-scan)
+  scanProcessTick();
 
   // Redraw screen if necessary
   if(needRedraw) drawScreen();

@@ -49,6 +49,7 @@
 #if defined(LILYGO_SI473X)
 
 // SI4732/5 PINs for LilyGo T-Embed SI473x Shield
+#define BOARD_HAS_MUTE_CIRCUIT        // Board has AUDIO_MUTE + optional PIN_AMP_EN
 #define PIN_POWER_ON  46            // GPIO46   Board/shield power enable (1 = Enable)
 #define RESET_PIN     16            // GPIO16   SI4732/5 Reset
 #define ESP32_I2C_SCL  8            // GPIO8    SI4732/5 Clock
@@ -68,6 +69,7 @@
 #else
 
 // SI4732/5 PINs
+#define BOARD_HAS_MUTE_CIRCUIT        // Board has AUDIO_MUTE + optional PIN_AMP_EN
 #define PIN_POWER_ON  15            // GPIO15   External LDO regulator enable (1 = Enable)
 #define RESET_PIN     16            // GPIO16   SI4732/5 Reset
 #define ESP32_I2C_SCL 17            // GPIO17   SI4732/5 Clock

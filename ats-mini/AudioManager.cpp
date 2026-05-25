@@ -30,11 +30,15 @@ static void applyMute(bool mute)
 {
   if(mute) {
     if(PIN_AMP_EN >= 0) digitalWrite(PIN_AMP_EN, LOW);
+#ifdef BOARD_HAS_MUTE_CIRCUIT
     digitalWrite(AUDIO_MUTE, HIGH);
+#endif
     delay(50);
     rx.setAudioMute(true);
   } else {
+#ifdef BOARD_HAS_MUTE_CIRCUIT
     digitalWrite(AUDIO_MUTE, LOW);
+#endif
     delay(50);
     rx.setAudioMute(false);
     if(PIN_AMP_EN >= 0) digitalWrite(PIN_AMP_EN, HIGH);
@@ -49,7 +53,9 @@ void audioInit(void)
   mainMuted = false;
   squelchMuted = false;
   effectiveMuted = false;
+#ifdef BOARD_HAS_MUTE_CIRCUIT
   digitalWrite(AUDIO_MUTE, LOW);
+#endif
   delay(50);
   rx.setAudioMute(false);
   if(PIN_AMP_EN >= 0) digitalWrite(PIN_AMP_EN, HIGH);

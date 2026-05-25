@@ -158,7 +158,9 @@ void webInit()
     bool squelchIsSnr = rs.squelch[rs.mode] & 0x80;
     int avcIdx = (rs.mode == USB || rs.mode == LSB) ? rs.ssbAvcIdx : rs.amAvcIdx;
 
-    String json = "{";
+    String json;
+    json.reserve(640);
+    json = "{";
     json += "\"firmware\":" + String(VER_APP) + ",";
     json += "\"frequency_khz\":" + String(effFreq < 0 ? 0 : (uint16_t)effFreq) + ",";
     json += "\"bfo\":" + String(rs.bfo) + ",";
@@ -194,8 +196,16 @@ void webInit()
     request->send(200, "application/json", json);
   });
 
-  // Remote control API
+  // Remote control API with rate limiting (max 20 commands/sec)
   server.on("/api/command", HTTP_POST, [](AsyncWebServerRequest *request) {
+    static uint32_t lastCmdTime = 0;
+    uint32_t now = millis();
+    if(now - lastCmdTime < 50) {
+      request->send(429, "application/json", "{\"status\":\"rate_limited\"}");
+      return;
+    }
+    lastCmdTime = now;
+
     if(loginUsername != "" && loginPassword != "")
       if(!request->authenticate(loginUsername.c_str(), loginPassword.c_str()))
         return request->requestAuthentication();
@@ -408,7 +418,9 @@ void webInit()
     if(loginUsername != "" && loginPassword != "")
       if(!request->authenticate(loginUsername.c_str(), loginPassword.c_str()))
         return request->requestAuthentication();
-    String json = "{";
+    String json;
+    json.reserve(512);
+    json = "{";
     json += "\"idx\":" + String(themeIdx) + ",";
     json += "\"name\":\"" + String(TH.name) + "\",";
     json += "\"themeCount\":" + String(getTotalThemes()) + ",";
@@ -456,7 +468,9 @@ void webInit()
     // Status poll — non-blocking, returns JSON
     if (cmd == "status" || cmd == "poll") {
       ScanStatus s; scanCopyStatus(&s);
-      String json = "{";
+      String json;
+      json.reserve(640);
+      json = "{";
       json += "\"running\":" + String(s.running) + ",";
       json += "\"mode\":" + String(s.mode) + ",";
       json += "\"current_freq\":" + String(s.currentFreq) + ",";

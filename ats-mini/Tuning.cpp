@@ -250,8 +250,7 @@ bool consumeAbortPending()
   if(pb1.update(digitalRead(ENCODER_PUSH_BUTTON) == LOW, 0).isPressed)
   {
     // Wait till the button is released, otherwise the main loop will register a click
-    while(pb1.update(digitalRead(ENCODER_PUSH_BUTTON) == LOW).isPressed)
-      delay(100);
+    { uint32_t _t = millis(); while(pb1.update(digitalRead(ENCODER_PUSH_BUTTON) == LOW).isPressed) { if(millis() - _t > 5000) break; delay(100); } }
     return true;
   }
 

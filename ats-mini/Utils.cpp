@@ -102,8 +102,7 @@ bool sleepOn(int x)
     displaySleep();
 
     // Wait till the button is released to prevent immediate wakeup
-    while(pb1.update(digitalRead(ENCODER_PUSH_BUTTON) == LOW).isPressed)
-      delay(100);
+    { uint32_t _t = millis(); while(pb1.update(digitalRead(ENCODER_PUSH_BUTTON) == LOW).isPressed) { if(millis() - _t > 5000) break; delay(100); } }
 
     if(radioState.sleepMode == SLEEP_LIGHT)
     {
@@ -158,8 +157,7 @@ bool sleepOn(int x)
     displaySetBrightness(radioState.brightness);
     // Wait till the button is released to prevent the main loop clicks
     pb1.reset(); // Reset the button state (its timers could be stale due to CPU sleep)
-    while(pb1.update(digitalRead(ENCODER_PUSH_BUTTON) == LOW, 0).isPressed)
-      delay(100);
+    { uint32_t _t = millis(); while(pb1.update(digitalRead(ENCODER_PUSH_BUTTON) == LOW, 0).isPressed) { if(millis() - _t > 5000) break; delay(100); } }
   }
 
   return(sleep_on);

@@ -23,6 +23,7 @@
 
 RadioState radioState = {0};
 portMUX_TYPE radioStateMux = portMUX_INITIALIZER_UNLOCKED;
+portMUX_TYPE encoderMux = portMUX_INITIALIZER_UNLOCKED;
 
 // SI473/5 and UI
 #define ELAPSED_COMMAND      10000  // time to turn off the last command controlled by encoder. Time to goes back to the VFO control // G8PTN: Increased time and corrected comment
@@ -262,8 +263,10 @@ ICACHE_RAM_ATTR void rotaryEncoder()
     // Do not accumulate too many encoder steps if event loop doesn't consume them
     if(abs(encoderCount) < MAX_ENCODER_ACCUM)
     {
+      portENTER_CRITICAL_ISR(&encoderMux);
       encoderCount += delta;
       encoderCountAccel += accelDelta;
+      portEXIT_CRITICAL_ISR(&encoderMux);
     }
 
     // Only abort seek on significant encoder movement (>=3 steps) to prevent

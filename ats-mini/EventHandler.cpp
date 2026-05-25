@@ -21,12 +21,12 @@ extern uint32_t elapsedCommand;
 uint32_t consumeEncoderCounts()
 {
   int16_t encCount, encCountAccel;
-  noInterrupts();
+  taskENTER_CRITICAL(&encoderMux);
   encCount = encoderCount;
   encCountAccel = encoderCountAccel;
   encoderCount = 0;
   encoderCountAccel = 0;
-  interrupts();
+  taskEXIT_CRITICAL(&encoderMux);
   return ((uint32_t)encCountAccel << 16) | ((uint16_t)encCount & 0xFFFF);
 }
 

@@ -141,6 +141,7 @@ typedef struct {
 
 extern RadioState radioState;
 extern portMUX_TYPE radioStateMux;
+extern portMUX_TYPE encoderMux;
 
 // Get the effective frequency in kHz, accounting for BFO offset in SSB mode.
 // Uses signed arithmetic and clamps to 0 to prevent unsigned integer underflow

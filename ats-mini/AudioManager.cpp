@@ -66,17 +66,17 @@ void audioInit(void)
 //
 void audioMuteForce(bool on)
 {
+  bool doMute = false;
   portENTER_CRITICAL(&audioMuteMux);
   if(on) {
     effectiveMuted = true;
-    applyMute(true);
+    doMute = true;
   } else {
     effectiveMuted = false;
-    if(!mainMuted && !squelchMuted) {
-      applyMute(false);
-    }
+    if(!mainMuted && !squelchMuted) doMute = true;
   }
   portEXIT_CRITICAL(&audioMuteMux);
+  if(doMute) applyMute(on);
 }
 
 //
@@ -84,21 +84,19 @@ void audioMuteForce(bool on)
 //
 void audioMuteMain(bool on)
 {
+  bool doMute = false;
   portENTER_CRITICAL(&audioMuteMux);
   if(on) {
     effectiveMuted = true;
-    if(!mainMuted && !squelchMuted) {
-      applyMute(true);
-    }
+    if(!mainMuted && !squelchMuted) doMute = true;
     mainMuted = true;
   } else {
     effectiveMuted = false;
-    if(mainMuted && !squelchMuted) {
-      applyMute(false);
-    }
+    if(mainMuted && !squelchMuted) doMute = true;
     mainMuted = false;
   }
   portEXIT_CRITICAL(&audioMuteMux);
+  if(doMute) applyMute(on);
 }
 
 //
@@ -106,21 +104,19 @@ void audioMuteMain(bool on)
 //
 void audioSquelchClose(bool on)
 {
+  bool doMute = false;
   portENTER_CRITICAL(&audioMuteMux);
   if(on) {
     effectiveMuted = true;
-    if(!mainMuted && !squelchMuted) {
-      applyMute(true);
-    }
+    if(!mainMuted && !squelchMuted) doMute = true;
     squelchMuted = true;
   } else {
     effectiveMuted = false;
-    if(!mainMuted && squelchMuted) {
-      applyMute(false);
-    }
+    if(!mainMuted && squelchMuted) doMute = true;
     squelchMuted = false;
   }
   portEXIT_CRITICAL(&audioMuteMux);
+  if(doMute) applyMute(on);
 }
 
 //
@@ -128,19 +124,19 @@ void audioSquelchClose(bool on)
 //
 void audioTempMute(bool on)
 {
+  bool doMute = false;
   portENTER_CRITICAL(&audioMuteMux);
   if(on) {
     effectiveMuted = true;
-    if(!mainMuted && !squelchMuted) {
-      applyMute(true);
-    }
+    if(!mainMuted && !squelchMuted) doMute = true;
   } else {
     if(!mainMuted && !squelchMuted) {
       effectiveMuted = false;
-      applyMute(false);
+      doMute = true;
     }
   }
   portEXIT_CRITICAL(&audioMuteMux);
+  if(doMute) applyMute(on);
 }
 
 //

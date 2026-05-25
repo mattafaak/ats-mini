@@ -77,7 +77,7 @@ void prefsSaveBand(uint8_t idx, bool openPrefs)
   if(openPrefs) prefs.begin("bands", false, STORAGE_PARTITION);
 
   // Compose preference name and value
-  sprintf(name, "Band-%d", idx);
+  snprintf(name, sizeof(name), "Band-%d", idx);
   value.currentFreq    = bands[idx].currentFreq;     // Frequency
   value.bandMode       = bands[idx].bandMode;        // Modulation
   value.currentStepIdx = bands[idx].currentStepIdx;  // Step
@@ -101,7 +101,7 @@ bool prefsLoadBand(uint8_t idx, bool openPrefs)
   if(openPrefs) prefs.begin("bands", true, STORAGE_PARTITION);
 
   // Compose preference name
-  sprintf(name, "Band-%d", idx);
+  snprintf(name, sizeof(name), "Band-%d", idx);
 
   // Read preference
   bool result = !!prefs.getBytes(name, &value, sizeof(value));
@@ -130,7 +130,7 @@ void prefsSaveMemory(uint8_t idx, bool openPrefs)
   if(openPrefs) prefs.begin("memories", false, STORAGE_PARTITION);
 
   // Compose preference name
-  sprintf(name, "Memory-%d", idx);
+  snprintf(name, sizeof(name), "Memory-%d", idx);
 
   // Write a preference
   prefs.putBytes(name, &memories[idx], sizeof(memories[idx]));
@@ -147,7 +147,7 @@ bool prefsLoadMemory(uint8_t idx, bool openPrefs)
   if(openPrefs) prefs.begin("memories", true, STORAGE_PARTITION);
 
   // Compose preference name
-  sprintf(name, "Memory-%d", idx);
+  snprintf(name, sizeof(name), "Memory-%d", idx);
 
   // Write a preference
   bool result = !!prefs.getBytes(name, &memories[idx], sizeof(memories[idx]));

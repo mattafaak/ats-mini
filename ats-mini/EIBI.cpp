@@ -508,7 +508,7 @@ bool eibiLoadSchedule()
             if(!(lineCnt & 31))
             {
               char statusMessage[64];
-              sprintf(statusMessage, "... %d bytes, %d entries ...", byteCnt, lineCnt);
+              snprintf(statusMessage, sizeof(statusMessage), "... %d bytes, %d entries ...", byteCnt, lineCnt);
               drawScreen(eibiMessage, statusMessage);
             }
           }

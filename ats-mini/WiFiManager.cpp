@@ -198,8 +198,8 @@ static bool wifiConnect()
   for(int j=0 ; (j<3) ; j++)
   {
     char nameSSID[16], namePASS[16];
-    sprintf(nameSSID, "wifissid%d", j+1);
-    sprintf(namePASS, "wifipass%d", j+1);
+    snprintf(nameSSID, sizeof(nameSSID), "wifissid%d", j+1);
+    snprintf(namePASS, sizeof(namePASS), "wifipass%d", j+1);
 
     String ssid = prefs.getString(nameSSID, "");
     String password = prefs.getString(namePASS, "");

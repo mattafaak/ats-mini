@@ -22,6 +22,7 @@
 #include "Scan.h"
 
 RadioState radioState = {0};
+portMUX_TYPE radioStateMux = portMUX_INITIALIZER_UNLOCKED;
 
 // SI473/5 and UI
 #define ELAPSED_COMMAND      10000  // time to turn off the last command controlled by encoder. Time to goes back to the VFO control // G8PTN: Increased time and corrected comment

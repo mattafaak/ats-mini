@@ -141,28 +141,39 @@ void webInit()
 
   // JSON status API
   server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request) {
-    int cal = (radioState.mode == USB) ? getCurrentBand()->usbCal :
-              (radioState.mode == LSB) ? getCurrentBand()->lsbCal : 0;
+    // Take atomic snapshot of radio state (read from web task, written by main loop)
+    RadioState rs;
+    taskENTER_CRITICAL(&radioStateMux);
+    memcpy(&rs, &radioState, sizeof(rs));
+    taskEXIT_CRITICAL(&radioStateMux);
+
+    int32_t effFreq = (int32_t)rs.frequency + rs.bfo / 1000;
+    int cal = (rs.mode == USB) ? getCurrentBand()->usbCal :
+              (rs.mode == LSB) ? getCurrentBand()->lsbCal : 0;
     int8_t ws = getWiFiStatus();
     String wifiStatusStr = (ws == 2) ? "station" :
                            (ws == 1) ? "ap" :
                            (ws == 0) ? "disabled" : "disconnected";
+    uint8_t squelchVal = rs.squelch[rs.mode] & 0x7F;
+    bool squelchIsSnr = rs.squelch[rs.mode] & 0x80;
+    int avcIdx = (rs.mode == USB || rs.mode == LSB) ? rs.ssbAvcIdx : rs.amAvcIdx;
+
     String json = "{";
     json += "\"firmware\":" + String(VER_APP) + ",";
-    json += "\"frequency_khz\":" + String(getEffectiveFreq()) + ",";
-    json += "\"bfo\":" + String(radioState.bfo) + ",";
+    json += "\"frequency_khz\":" + String(effFreq < 0 ? 0 : (uint16_t)effFreq) + ",";
+    json += "\"bfo\":" + String(rs.bfo) + ",";
     json += "\"cal\":" + String(cal) + ",";
     json += "\"band\":\"" + String(getCurrentBand()->bandName) + "\",";
-    json += "\"mode\":\"" + String(bandModeDesc[radioState.mode]) + "\",";
+    json += "\"mode\":\"" + String(bandModeDesc[rs.mode]) + "\",";
     json += "\"step\":\"" + String(getCurrentStep()->desc) + "\",";
     json += "\"bandwidth\":\"" + String(getCurrentBandwidth()->desc) + "\",";
-    json += "\"volume\":" + String(radioState.vol) + ",";
+    json += "\"volume\":" + String(rs.vol) + ",";
     json += "\"band_min\":" + String(getCurrentBand()->minimumFreq) + ",";
     json += "\"band_max\":" + String(getCurrentBand()->maximumFreq) + ",";
-    json += "\"agc_index\":" + String(radioState.agcIndex) + ",";
-    json += "\"avc_index\":" + String(isSSB() ? radioState.ssbAvcIdx : radioState.amAvcIdx) + ",";
-    json += "\"rssi_dBuv\":" + String(radioState.rssi) + ",";
-    json += "\"snr_dB\":" + String(radioState.snr) + ",";
+    json += "\"agc_index\":" + String(rs.agcIndex) + ",";
+    json += "\"avc_index\":" + String(avcIdx) + ",";
+    json += "\"rssi_dBuv\":" + String(rs.rssi) + ",";
+    json += "\"snr_dB\":" + String(rs.snr) + ",";
     json += "\"battery_V\":" + String(batteryMonitor()) + ",";
     json += String("\"muted\":") + (audioIsMuted() ? "true" : "false") + ",";
     json += String("\"squelch_enabled\":") + (audioIsSquelched() ? "true" : "false") + ",";
@@ -172,12 +183,12 @@ void webInit()
     json += "\"ip_address\":\"" + getWiFiIPAddress() + "\",";
     json += "\"station_name\":\"" + jsonEscape(String(getStationName())) + "\",";
     json += "\"program_info\":\"" + jsonEscape(String(getProgramInfo())) + "\",";
-    json += "\"rssi\":" + String(radioState.rssi) + ",";
-    json += "\"snr\":" + String(radioState.snr) + ",";
+    json += "\"rssi\":" + String(rs.rssi) + ",";
+    json += "\"snr\":" + String(rs.snr) + ",";
     json += String("\"main_muted\":") + (audioIsMainMuted() ? "true" : "false") + ",";
     json += String("\"squelched\":") + (audioIsSquelched() ? "true" : "false") + ",";
-    json += "\"squelch\":" + String(radioState.squelch[radioState.mode] & 0x7F) + ",";
-    json += String("\"squelch_is_snr\":") + ((radioState.squelch[radioState.mode] & 0x80) ? "true" : "false") + ",";
+    json += "\"squelch\":" + String(squelchVal) + ",";
+    json += String("\"squelch_is_snr\":") + (squelchIsSnr ? "true" : "false") + ",";
     json += "\"theme_idx\":" + String(themeIdx);
     json += "}";
     request->send(200, "application/json", json);

@@ -62,10 +62,12 @@ ICACHE_RAM_ATTR int16_t accelerateEncoder(int8_t dir)
 //
 void useBand(const Band *band)
 {
-  // Set current frequency and mode, reset BFO
+  // Set current frequency and mode, reset BFO (atomic for web task reads)
+  taskENTER_CRITICAL(&radioStateMux);
   radioState.frequency = band->currentFreq;
   radioState.mode = band->bandMode;
   radioState.bfo = 0;
+  taskEXIT_CRITICAL(&radioStateMux);
 
   if(band->bandMode==FM)
   {

@@ -166,8 +166,12 @@ static bool wifiInitAP()
   IPAddress gateway(10, 1, 1, 1);
   IPAddress subnet(255, 255, 255, 0);
 
-  // Start as access point (AP)
-  WiFi.softAP(apSSID, apPWD, apChannel, apHideMe, apClients);
+  // Start as access point (AP) with retry — softAP can fail on first call
+  for(int retry = 0; retry < 3; retry++)
+  {
+    if(WiFi.softAP(apSSID, apPWD, apChannel, apHideMe, apClients)) break;
+    delay(200);
+  }
   WiFi.softAPConfig(ip, gateway, subnet);
 
   drawScreen(

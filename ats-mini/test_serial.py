@@ -784,8 +784,11 @@ def test_web_api_seek():
     s = get_status(ser)
     if not s: return
     band = s.get("band", "")
-    # Skip on large SW bands where seek can take minutes
-    if band in ("ALL", "LW", "MW", "SW"):
+    freq_khz = s.get("freq_khz", 0)
+    # Seek blocks the async handler (rx.seekStationProgress is synchronous).
+    # Only VHF FM (64-108 MHz) seek completes within the 15s timeout.
+    # All other bands (SW/MW/LW) are too slow.
+    if band != "VHF":
         print(f"  SKIP on {band} band (seek would block too long)")
         return
     # Short timeout — seek blocks the async handler, so curl waits for response

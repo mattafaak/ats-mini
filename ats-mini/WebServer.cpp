@@ -130,7 +130,10 @@ void webInit()
     json += "\"step\":\"" + String(getCurrentStep()->desc) + "\",";
     json += "\"bandwidth\":\"" + String(getCurrentBandwidth()->desc) + "\",";
     json += "\"volume\":" + String(radioState.vol) + ",";
+    json += "\"band_min\":" + String(getCurrentBand()->minimumFreq) + ",";
+    json += "\"band_max\":" + String(getCurrentBand()->maximumFreq) + ",";
     json += "\"agc_index\":" + String(radioState.agcIndex) + ",";
+    json += "\"avc_index\":" + String(isSSB() ? radioState.ssbAvcIdx : radioState.amAvcIdx) + ",";
     json += "\"rssi_dBuv\":" + String(radioState.rssi) + ",";
     json += "\"snr_dB\":" + String(radioState.snr) + ",";
     json += "\"battery_V\":" + String(batteryMonitor()) + ",";
@@ -236,8 +239,11 @@ void webInit()
       int idx = value.toInt();
       if (idx < 0 || idx > 3) { request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Bad mode\"}"); return; }
       if (idx == 0) {
-        // FM mode only exists on the FM band — doBand() switches to it
-        doBand(0 - bandIdx);
+        doBand(0 - bandIdx);  // FM is only on the FM band
+      } else if (radioState.mode == FM) {
+        // Switching from FM to AM/LSB/USB: first leave FM band
+        doBand(1 - bandIdx);  // ALL band supports all modes
+        doMode(idx - radioState.mode);
       } else {
         doMode(idx - radioState.mode);
       }
@@ -836,81 +842,139 @@ static const String webRadioPage()
 
 static const String webControlsPage()
 {
+  Band *band = getCurrentBand();
+  uint16_t step = getCurrentStep()->step;
+  int cal = (radioState.mode == USB) ? band->usbCal :
+            (radioState.mode == LSB) ? band->lsbCal : 0;
+  int8_t avc = isSSB() ? radioState.ssbAvcIdx : radioState.amAvcIdx;
+  uint8_t agc = radioState.agcIndex;
+  String freqStr = (radioState.mode == FM)
+    ? String((float)radioState.frequency / 100.0, 1) + " MHz"
+    : String(radioState.frequency) + " kHz";
+
   return webPage(
 "<H1>Controls</H1>"
-"<TABLE>"
+"<DIV ID='main'>"
 
-// Tuning section
-"<TR><TH CLASS='HEADING'>Tuning</TH></TR>"
-"<TR><TD>"
-  "<DIV CLASS='CTRL-ROW'>Freq: <INPUT TYPE='text' ID='f' SIZE='10'> "
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=tune&value='+document.getElementById('f').value})\">Go</BUTTON></DIV>"
-  "<DIV CLASS='BTN-GROUP'>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=seek&value=down'})\">&lt;&lt; Seek</BUTTON>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=seek&value=up'})\">Seek &gt;&gt;</BUTTON></DIV>"
-  "<DIV CLASS='CTRL-ROW'>Step: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=step&value='+this.value})\">"
+// === Tuning + Band/Mode (combined) ===
+"<DIV CLASS='CTRL-ROW'>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=prev'}).then(function(){setTimeout(sp,300)})\">&lt; Prev</BUTTON>"
+  " <B ID='bn'>" + String(band->bandName) + "</B> "
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=next'}).then(function(){setTimeout(sp,300)})\">Next &gt;</BUTTON>"
+"</DIV>"
+"<DIV CLASS='CTRL-ROW'>"
+  "<INPUT TYPE='range' MIN='" + String(band->minimumFreq) + "' MAX='" + String(band->maximumFreq) + "' STEP='" + String(step) + "' VALUE='" + String(radioState.frequency) + "' CLASS='SLIDER' ID='fs' STYLE='flex:1;min-width:0' "
+  "ONINPUT=\"document.getElementById('fv').textContent=this.value;fetch('/api/command',{method:'POST',body:'cmd=tune&value='+this.value})\">"
+  " <SPAN ID='fv'>" + freqStr + "</SPAN> <SPAN ID='fm'>" + String(bandModeDesc[radioState.mode]) + "</SPAN>"
+"</DIV>"
+"<DIV CLASS='BTN-GROUP'>"
+  "Mode: <BUTTON ID='m0' ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=0'}).then(function(){setTimeout(sp,300)})\">FM</BUTTON>"
+  "<BUTTON ID='m1' ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=1'}).then(function(){setTimeout(sp,300)})\">AM</BUTTON>"
+  "<BUTTON ID='m2' ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=2'}).then(function(){setTimeout(sp,300)})\">LSB</BUTTON>"
+  "<BUTTON ID='m3' ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=3'}).then(function(){setTimeout(sp,300)})\">USB</BUTTON>"
+  " BW: <SELECT ID='bws' ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=bandwidth&value='+this.value}).then(function(){setTimeout(sp,300)})\">"
+    "<OPTION VALUE='0'>Auto</OPTION><OPTION VALUE='1'>1.0k</OPTION><OPTION VALUE='2'>2.0k</OPTION>"
+    "<OPTION VALUE='3'>2.5k</OPTION><OPTION VALUE='4'>3.0k</OPTION><OPTION VALUE='5'>4.0k</OPTION><OPTION VALUE='6'>6.0k</OPTION>"
+  "</SELECT>"
+  " Step: <SELECT ID='sts' ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=step&value='+this.value})\">"
     "<OPTION VALUE='0'>Auto</OPTION><OPTION VALUE='1'>1</OPTION><OPTION VALUE='2'>5</OPTION>"
     "<OPTION VALUE='3'>9</OPTION><OPTION VALUE='4'>10</OPTION><OPTION VALUE='5'>100</OPTION>"
   "</SELECT>"
-"</TD></TR>"
+"</DIV>"
+"<DIV CLASS='BTN-GROUP'>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=seek&value=down'})\">&lt;&lt; Seek</BUTTON>"
+  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=seek&value=up'})\">Seek &gt;&gt;</BUTTON>"
+"</DIV>"
 
-// Audio section
-"<TR><TH CLASS='HEADING'>Audio</TH></TR>"
-"<TR><TD>"
-  "<DIV CLASS='CTRL-ROW'>Vol: <INPUT TYPE='range' MIN='0' MAX='63' VALUE='" + String(radioState.vol) + "' CLASS='SLIDER' "
-  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=volume&value='+this.value})\"> "
-  "<SPAN>" + String(radioState.vol) + "</SPAN></DIV>"
-  "<DIV CLASS='CTRL-ROW'><BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=mute&value='+(b.textContent=='Mute')});b.textContent=b.textContent=='Mute'?'Unmute':'Mute'\">Mute</BUTTON></DIV>"
-  "<DIV CLASS='CTRL-ROW'>Squelch: <INPUT TYPE='range' MIN='0' MAX='127' VALUE='0' CLASS='SLIDER' "
-  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=squelch&value='+this.value})\"></DIV>"
-  "<DIV CLASS='BTN-GROUP'>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=rssi'})\">RSSI</BUTTON>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=snr'})\">SNR</BUTTON></DIV>"
-"</TD></TR>"
+// === Audio ===
+"<DIV CLASS='CTRL-ROW'>"
+  "Vol: <INPUT TYPE='range' MIN='0' MAX='63' VALUE='" + String(radioState.vol) + "' CLASS='SLIDER' "
+  "ONINPUT=\"document.getElementById('vv').textContent=this.value;fetch('/api/command',{method:'POST',body:'cmd=volume&value='+this.value})\">"
+  " <SPAN ID='vv'>" + String(radioState.vol) + "</SPAN>/63"
+  " <BUTTON ID='mt' ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mute&value='+(this.textContent=='Mute')).then(function(){setTimeout(sp,300)})\">Mute</BUTTON>"
+"</DIV>"
+"<DIV CLASS='CTRL-ROW'>"
+  "Squelch: <INPUT TYPE='range' MIN='0' MAX='127' VALUE='0' CLASS='SLIDER' ID='sqs' "
+  "ONINPUT=\"document.getElementById('sqv').textContent=this.value;fetch('/api/command',{method:'POST',body:'cmd=squelch&value='+this.value})\">"
+  " <SPAN ID='sqv'>0</SPAN>"
+  " <BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=rssi'})\">RSSI</BUTTON>"
+  " <BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=snr'})\">SNR</BUTTON>"
+"</DIV>"
+"<DIV CLASS='BTN-GROUP'>"
+  "RSSI: <SPAN ID='rssi'>" + String(radioState.rssi) + "</SPAN> dBuV"
+  " SNR: <SPAN ID='snri'>" + String(radioState.snr) + "</SPAN> dB"
+"</DIV>"
 
-// Band/Mode section
-"<TR><TH CLASS='HEADING'>Band / Mode</TH></TR>"
-"<TR><TD>"
-  "<DIV CLASS='BTN-GROUP'>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=prev'})\">Prev</BUTTON>"
-  "<SPAN>" + String(getCurrentBand()->bandName) + "</SPAN>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=band&value=next'})\">Next</BUTTON></DIV>"
-  "<DIV CLASS='BTN-GROUP'>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=0'})\">FM</BUTTON>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=1'})\">AM</BUTTON>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=2'})\">LSB</BUTTON>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mode&value=3'})\">USB</BUTTON></DIV>"
-  "<DIV CLASS='CTRL-ROW'>BW: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=bandwidth&value='+this.value})\">"
-    "<OPTION>Auto</OPTION><OPTION>1.0k</OPTION><OPTION>2.0k</OPTION>"
-    "<OPTION>2.5k</OPTION><OPTION>3.0k</OPTION><OPTION>4.0k</OPTION><OPTION>6.0k</OPTION>"
-  "</SELECT>"
-"</TD></TR>"
-
-// Settings section
-"<TR><TH CLASS='HEADING'>Settings</TH></TR>"
-"<TR><TD>"
-  "<DIV CLASS='CTRL-ROW'>AGC: <INPUT TYPE='range' MIN='0' MAX='37' VALUE='" + String(radioState.agcIndex) + "' CLASS='SLIDER' "
-  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=agc&value='+this.value})\"></DIV>"
-  "<DIV CLASS='CTRL-ROW'>AVC: <INPUT TYPE='range' MIN='0' MAX='90' VALUE='0' CLASS='SLIDER' "
-  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=avc&value='+this.value})\"></DIV>"
-  "<DIV CLASS='BTN-GROUP'>Cal: <BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=cal&value=-1'})\">-</BUTTON>"
-  "<BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=cal&value=1'})\">+</BUTTON></DIV>"
-  "<DIV CLASS='CTRL-ROW'>Brightness: <INPUT TYPE='range' MIN='10' MAX='255' VALUE='" + String(radioState.brightness) + "' CLASS='SLIDER' "
-  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=brightness&value='+this.value})\"></DIV>"
-  "<DIV CLASS='BTN-GROUP'>"
+// === Settings ===
+"<DIV CLASS='CTRL-ROW'>"
+  "AGC: <INPUT TYPE='range' MIN='0' MAX='37' VALUE='" + String(agc) + "' CLASS='SLIDER' ID='agcs' "
+  "ONINPUT=\"document.getElementById('agcv').textContent=this.value;fetch('/api/command',{method:'POST',body:'cmd=agc&value='+this.value})\">"
+  " <SPAN ID='agcv'>" + String(agc) + "</SPAN>/37"
+"</DIV>"
+"<DIV CLASS='CTRL-ROW'>"
+  "AVC: <INPUT TYPE='range' MIN='0' MAX='90' VALUE='" + String(avc) + "' CLASS='SLIDER' ID='avcs' "
+  "ONINPUT=\"document.getElementById('avcv').textContent=this.value;fetch('/api/command',{method:'POST',body:'cmd=avc&value='+this.value})\">"
+  " <SPAN ID='avcv'>" + String(avc) + "</SPAN>/90"
+"</DIV>"
+"<DIV CLASS='BTN-GROUP'>"
+  "Cal: <BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=cal&value=-1'}).then(function(){setTimeout(sp,300)})\">&minus;</BUTTON>"
+  " <SPAN ID='calv'>" + String(cal) + "</SPAN>"
+  " <BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=cal&value=1'}).then(function(){setTimeout(sp,300)})\">+</BUTTON>"
+"</DIV>"
+"<DIV CLASS='CTRL-ROW'>"
+  "Brightness: <INPUT TYPE='range' MIN='10' MAX='255' VALUE='" + String(radioState.brightness) + "' CLASS='SLIDER' "
+  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=brightness&value='+this.value})\">"
+"</DIV>"
+"<DIV CLASS='BTN-GROUP'>"
   "<BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=sleep&value='+(b.textContent=='Sleep')});b.textContent=b.textContent=='Sleep'?'Wake':'Sleep'\">Sleep</BUTTON>"
   "<BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=zoom&value='+(b.textContent=='Zoom')});b.textContent=b.textContent=='Zoom'?'Normal':'Zoom'\">Zoom</BUTTON>"
-  "<BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=scroll&value='+(b.textContent=='Normal'?'reverse':'normal')});b.textContent=b.textContent=='Normal'?'Reverse':'Normal'\">Normal</BUTTON></DIV>"
-  "<DIV CLASS='CTRL-ROW'>FM Region: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=fm_region&value='+this.value})\">"
+  "<BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=scroll&value='+(b.textContent=='Normal'?'reverse':'normal')});b.textContent=b.textContent=='Normal'?'Reverse':'Normal'\">Normal</BUTTON>"
+"</DIV>"
+"<DIV CLASS='CTRL-ROW'>"
+  "FM Region: <SELECT ID='fmr' ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=fm_region&value='+this.value})\">"
     "<OPTION VALUE='0'>USA</OPTION><OPTION VALUE='1'>Europe</OPTION><OPTION VALUE='2'>Japan</OPTION>"
-  "</SELECT></DIV>"
-  "<DIV CLASS='CTRL-ROW'>RDS: <SELECT ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=rds&value='+this.value})\">"
+  "</SELECT>"
+  " RDS: <SELECT ID='rds' ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=rds&value='+this.value})\">"
     "<OPTION VALUE='0'>Off</OPTION><OPTION VALUE='1'>PS</OPTION><OPTION VALUE='7'>PS+PI+CT</OPTION>"
-  "</SELECT></DIV>"
-"</TD></TR>"
+  "</SELECT>"
+"</DIV>"
 
-"</TABLE>"
-);
+"</DIV>" // #main
+
+"<SCRIPT>"
+"function sp(){"
+  "fetch('/api/status').then(function(r){return r.json()}).then(function(d){"
+    "var fs=document.getElementById('fs');"
+    "if(fs){fs.min=d.band_min;fs.max=d.band_max;fs.value=d.frequency_khz;}"
+    "var fv=document.getElementById('fv');"
+    "if(fv)fv.textContent=d.band=='VHF'?(d.frequency_khz/100).toFixed(1)+' MHz':d.frequency_khz+' kHz';"
+    "var fm=document.getElementById('fm');if(fm)fm.textContent=d.mode;"
+    "var bn=document.getElementById('bn');if(bn)bn.textContent=d.band;"
+    "var mi={FM:0,AM:1,LSB:2,USB:3}[d.mode]||0;"
+    "for(var i=0;i<4;i++){var me=document.getElementById('m'+i);if(me)me.style.fontWeight=i==mi?'bold':'normal';}"
+    "var vv=document.getElementById('vv');if(vv)vv.textContent=d.volume;"
+    "var mt=document.getElementById('mt');if(mt)mt.textContent=d.muted||d.main_muted?'Unmute':'Mute';"
+    "var agcs=document.getElementById('agcs');if(agcs)agcs.value=d.agc_index;"
+    "var agcv=document.getElementById('agcv');if(agcv)agcv.textContent=d.agc_index;"
+    "var avcs=document.getElementById('avcs');if(avcs)avcs.value=d.avc_index;"
+    "var avcv=document.getElementById('avcv');if(avcv)avcv.textContent=d.avc_index;"
+    "var calv=document.getElementById('calv');if(calv)calv.textContent=d.cal;"
+    "var rssi=document.getElementById('rssi');if(rssi)rssi.textContent=d.rssi_dBuv;"
+    "var snri=document.getElementById('snri');if(snri)snri.textContent=d.snr_dB;"
+    "var sqv=document.getElementById('sqv');if(sqv)sqv.textContent=d.squelch;"
+    "var bws=document.getElementById('bws');if(bws){"
+      "var m={Auto:0,'1.0k':1,'2.0k':2,'2.5k':3,'3.0k':4,'4.0k':5,'6.0k':6};"
+      "var idx=m[d.bandwidth];if(idx!==undefined)bws.selectedIndex=idx;"
+    "}"
+    "var sts=document.getElementById('sts');if(sts){"
+      "var sm={Auto:0,'1':1,'5':2,'9':3,'10':4,'100':5};"
+      "var sidx=sm[d.step];if(sidx!==undefined)sts.selectedIndex=sidx;"
+    "}"
+  "});"
+"}"
+"setInterval(sp,2000);setTimeout(sp,300);"
+"</SCRIPT>"
+  );
 }
 
 static const String webMemoryPage()

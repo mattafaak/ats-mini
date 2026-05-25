@@ -42,7 +42,10 @@ void netTickTime()
   // Connect to WiFi if requested
   if(itIsTimeToWiFi && ((millis() - connectTime) > CONNECT_TIME))
   {
-    wifiInitConnection(radioState.wifiMode, false);
+    // Only reconnect if still disconnected — avoids killing a connection
+    // that recovered on its own after a brief glitch.
+    if(getWiFiStatus() == -1)
+      wifiInitConnection(radioState.wifiMode, false);
     connectTime = millis();
     itIsTimeToWiFi = false;
   }

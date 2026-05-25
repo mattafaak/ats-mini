@@ -74,6 +74,20 @@ static String jsonEscape(const String &s) {
   return r;
 }
 
+// Escape a string for embedding in HTML (XSS prevention)
+static String htmlEscape(const String &s) {
+  String r;
+  for (unsigned int i = 0; i < s.length(); i++) {
+    char c = s.charAt(i);
+    if      (c == '<') r += "&lt;";
+    else if (c == '>') r += "&gt;";
+    else if (c == '&') r += "&amp;";
+    else if (c == '"') r += "&quot;";
+    else               r += c;
+  }
+  return r;
+}
+
 //
 // Initialize internal web server
 //
@@ -118,7 +132,7 @@ void webInit()
   });
 
   // This method saves configuration form contents
-  server.on("/setconfig", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+  server.on("/setconfig", HTTP_POST, [] (AsyncWebServerRequest *request) {
     if(loginUsername != "" && loginPassword != "")
       if(!request->authenticate(loginUsername.c_str(), loginPassword.c_str()))
         return request->requestAuthentication();
@@ -849,13 +863,13 @@ static const String webRadioPage()
   "<DIV STYLE='background:var(--box-bg);border:1px solid var(--box-border);height:1.2em'>"
   "<DIV STYLE='background:var(--s-meter);height:100%;width:" + String(rssiPct) + "&#37;'></DIV></DIV>"
   + String(radioState.rssi) + " dBuV / " + String(radioState.snr) + " dB SNR</TD></TR>"
-"<TR><TD CLASS='LABEL'>Station</TD><TD>" + (stationName[0] ? stationName : "&mdash;") + "</TD></TR>"
-"<TR><TD CLASS='LABEL'>Info</TD><TD>" + (progInfo[0] ? progInfo : "&mdash;") + "</TD></TR>"
+"<TR><TD CLASS='LABEL'>Station</TD><TD>" + (stationName[0] ? htmlEscape(stationName) : "&mdash;") + "</TD></TR>"
+"<TR><TD CLASS='LABEL'>Info</TD><TD>" + (progInfo[0] ? htmlEscape(progInfo) : "&mdash;") + "</TD></TR>"
 "<TR><TD CLASS='LABEL'>Volume</TD><TD>" + String(radioState.vol) + "/63"
   + (audioIsMuted() ? " (Muted)" : "")
   + (audioIsSquelched() ? " (Squelched)" : "") + "</TD></TR>"
 "<TR><TD CLASS='LABEL'>Battery</TD><TD>" + String(batteryMonitor(), 2) + "V</TD></TR>"
-"<TR><TD CLASS='LABEL'>IP Address</TD><TD><A HREF='http://" + ip + "'>" + ip + "</A> (" + ssid + ")</TD></TR>"
+"<TR><TD CLASS='LABEL'>IP Address</TD><TD><A HREF='http://" + ip + "'>" + ip + "</A> (" + htmlEscape(ssid) + ")</TD></TR>"
 "<TR><TD CLASS='LABEL'>Firmware</TD><TD>" + String(getVersion(true)) + "</TD></TR>"
 "</TABLE>"
 );
@@ -1017,7 +1031,7 @@ static const String webMemoryPage()
         freq = String((float)memories[j].freq / 1000000.0, 1) + " MHz";
       else
         freq = String(memories[j].freq / 1000) + " kHz";
-      if (memories[j].name[0]) freq += " - " + String(memories[j].name);
+      if (memories[j].name[0]) freq += " - " + htmlEscape(String(memories[j].name));
       items += freq + " " + String(bandModeDesc[memories[j].mode]) + "</TD></TR>";
     }
   }
@@ -1031,12 +1045,12 @@ static const String webMemoryPage()
 const String webConfigPage()
 {
   prefs.begin("network", true, STORAGE_PARTITION);
-  String ssid1 = prefs.getString("wifissid1", "");
-  String pass1 = prefs.getString("wifipass1", "");
-  String ssid2 = prefs.getString("wifissid2", "");
-  String pass2 = prefs.getString("wifipass2", "");
-  String ssid3 = prefs.getString("wifissid3", "");
-  String pass3 = prefs.getString("wifipass3", "");
+  String ssid1 = htmlEscape(prefs.getString("wifissid1", ""));
+  String pass1 = htmlEscape(prefs.getString("wifipass1", ""));
+  String ssid2 = htmlEscape(prefs.getString("wifissid2", ""));
+  String pass2 = htmlEscape(prefs.getString("wifipass2", ""));
+  String ssid3 = htmlEscape(prefs.getString("wifissid3", ""));
+  String pass3 = htmlEscape(prefs.getString("wifipass3", ""));
   bool scanHidden = prefs.getBool("wifiscanhidden", false);
   prefs.end();
 

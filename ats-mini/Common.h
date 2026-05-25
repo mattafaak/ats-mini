@@ -23,7 +23,7 @@
 
 #define VER_APP        235  // Firmware version
 #define VER_SETTINGS   71   // Settings version
-#define VER_MEMORIES   71   // Memories version
+#define VER_MEMORIES   72   // Memories version
 #define VER_BANDS      72   // Bands version
 #define VER_STORAGE     0   // LittleFS storage version
 
@@ -202,7 +202,7 @@ typedef struct __attribute__((packed))
   uint32_t freq;          // Frequency (Hz)
   uint8_t  band;          // Band
   uint8_t  mode;          // Modulation
-  char     name[10];      // Name
+  char     name[11];      // Name
 } Memory;
 
 typedef struct

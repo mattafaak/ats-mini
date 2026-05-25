@@ -68,7 +68,8 @@ static String jsonEscape(const String &s) {
     char c = s.charAt(i);
     if (c == '"') r += "\\\"";
     else if (c == '\\') r += "\\\\";
-    else if (c < ' ') r += ' ';
+    else if ((unsigned char)c < 32) r += ' ';
+    else if ((unsigned char)c > 126) { r += ' '; }  // strip non-UTF-8 bytes
     else r += c;
   }
   return r;
@@ -83,6 +84,8 @@ static String htmlEscape(const String &s) {
     else if (c == '>') r += "&gt;";
     else if (c == '&') r += "&amp;";
     else if (c == '"') r += "&quot;";
+    else if ((unsigned char)c < 32) r += ' ';
+    else if ((unsigned char)c > 126) { r += ' '; }  // strip non-UTF-8
     else               r += c;
   }
   return r;

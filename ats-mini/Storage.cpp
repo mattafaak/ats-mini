@@ -152,6 +152,15 @@ bool prefsLoadMemory(uint8_t idx, bool openPrefs)
   // Write a preference
   bool result = !!prefs.getBytes(name, &memories[idx], sizeof(memories[idx]));
 
+  // Sanitize name field: null-terminate and strip any bytes outside the
+  // printable ASCII range (32-126) that could cause UTF-8 decode errors
+  // in the web UI.  For instance, 0xFF bytes left over from old firmware's
+  // 16-byte Memory struct would produce invalid UTF-8 in the HTML response.
+  memories[idx].name[sizeof(memories[idx].name) - 1] = '\0';
+  for(char *p = memories[idx].name; *p; p++) {
+    if((unsigned char)*p < 32 || (unsigned char)*p > 126) { *p = '\0'; break; }
+  }
+
   // Done with memory preferences
   if(openPrefs) prefs.end();
 

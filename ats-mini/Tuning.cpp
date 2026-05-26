@@ -35,7 +35,10 @@ ICACHE_RAM_ATTR int16_t accelerateEncoder(int8_t dir)
   static volatile int8_t lastEncoderDir = 0;
 
   uint32_t currentTime = millis();
-  lastSpeed = ((currentTime - lastEncoderTime) * 7 + lastSpeed * 3) / 10;
+  uint32_t delta = currentTime - lastEncoderTime;
+  // Guard against millis() rollover (~50 days) — reset if delta wraps
+  if (delta > speedThresholds[0]) delta = speedThresholds[0];
+  lastSpeed = (delta * 7 + lastSpeed * 3) / 10;
 
   // Reset acceleration on timeout or direction change
   if (lastSpeed > speedThresholds[0] || lastEncoderDir != dir) {
@@ -171,20 +174,20 @@ bool updateBFO(int newBFO, bool wrap)
     newBFO  = 0;
   }
 
-  // If need to change frequency...
-  if(newFreq != radioState.frequency)
+  // Read frequency from SI4732 (I2C read — keep outside spinlock)
+  uint16_t freq = radioState.frequency;
+  if(newFreq != freq)
   {
-    // Apply new frequency
     rx.setFrequency(newFreq);
-
-    // Re-apply to remove noise
     doAgc(0);
-    // Update current frequency
-    radioState.frequency = rx.getFrequency();
+    freq = rx.getFrequency();
   }
 
-  // Update current BFO
+  // Atomically update frequency + BFO so the web task never sees torn state
+  taskENTER_CRITICAL(&radioStateMux);
+  radioState.frequency = freq;
   radioState.bfo = newBFO;
+  taskEXIT_CRITICAL(&radioStateMux);
 
   // To move frequency forward, need to move the BFO backwards
   if (radioState.mode == USB)
@@ -331,6 +334,7 @@ bool doTune(int16_t enc)
   if(isSSB())
   {
     uint32_t step = getCurrentStep()->step;
+    if (step < 1) step = 1;
     uint32_t stepAdjust = (radioState.frequency * 1000 + radioState.bfo) % step;
     step = !stepAdjust? step : enc>0? step - stepAdjust : stepAdjust;
 
@@ -343,6 +347,7 @@ bool doTune(int16_t enc)
   else
   {
     uint16_t step = getCurrentStep()->step;
+    if (step < 1) step = 1;
     uint16_t stepAdjust = radioState.frequency % step;
     stepAdjust = (radioState.mode==FM) && (step==20)? (stepAdjust+10) % step : stepAdjust;
     step = !stepAdjust? step : enc>0? step - stepAdjust : stepAdjust;

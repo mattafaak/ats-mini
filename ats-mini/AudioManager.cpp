@@ -72,8 +72,10 @@ void audioMuteForce(bool on)
     effectiveMuted = true;
     doMute = true;
   } else {
-    effectiveMuted = false;
-    if(!mainMuted && !squelchMuted) doMute = true;
+    if(!mainMuted && !squelchMuted) {
+      effectiveMuted = false;
+      doMute = true;
+    }
   }
   portEXIT_CRITICAL(&audioMuteMux);
   if(doMute) applyMute(on);

@@ -10,6 +10,7 @@
 #include "Station.h"
 #include "Tuning.h"
 #include "AudioManager.h"
+#include "DisplayController.h"
 #include "Scan.h"
 
 #include <WiFi.h>
@@ -35,6 +36,7 @@ String getWiFiScanHidden(void) {
 static void webSetConfig(AsyncWebServerRequest *request);
 static const String webInputField(const String &name, const String &value, bool pass = false);
 static const String webStyleSheet();
+static const String webFmRegionOptions();
 static const String webPage(const String &body, int refreshSec = 0);
 static const String webUtcOffsetSelector();
 static const String webThemeSelector();
@@ -107,19 +109,32 @@ void webInit()
   MDNS.begin("atsmini"); // Set the hostname to "atsmini.local"
   MDNS.addService("http", "tcp", 80);
 
-  server.on("/", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+  auto checkAuth = [](AsyncWebServerRequest *request) -> bool {
+    if(loginUsername != "" && loginPassword != "")
+      if(!request->authenticate(loginUsername.c_str(), loginPassword.c_str())) {
+        request->requestAuthentication();
+        return false;
+      }
+    return true;
+  };
+
+  server.on("/", HTTP_ANY, [checkAuth] (AsyncWebServerRequest *request) {
+    if(!checkAuth(request)) return;
     request->send(200, "text/html", webRadioPage());
   });
 
-  server.on("/memory", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+  server.on("/memory", HTTP_ANY, [checkAuth] (AsyncWebServerRequest *request) {
+    if(!checkAuth(request)) return;
     request->send(200, "text/html", webMemoryPage());
   });
 
-  server.on("/controls", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+  server.on("/controls", HTTP_ANY, [checkAuth] (AsyncWebServerRequest *request) {
+    if(!checkAuth(request)) return;
     request->send(200, "text/html", webControlsPage());
   });
 
-  server.on("/scan", HTTP_ANY, [] (AsyncWebServerRequest *request) {
+  server.on("/scan", HTTP_ANY, [checkAuth] (AsyncWebServerRequest *request) {
+    if(!checkAuth(request)) return;
     request->send(200, "text/html", webScanPage());
   });
 
@@ -151,8 +166,24 @@ void webInit()
     taskEXIT_CRITICAL(&radioStateMux);
 
     int32_t effFreq = (int32_t)rs.frequency + rs.bfo / 1000;
-    int cal = (rs.mode == USB) ? getCurrentBand()->usbCal :
-              (rs.mode == LSB) ? getCurrentBand()->lsbCal : 0;
+    // Snapshot band state: bandIdx is volatile and written by the main loop
+    // without a mutex.  Aligned int reads are atomic on ESP32, so one read
+    // gets a stable index.  All subsequent lookups use the captured pointer
+    // so the JSON never mixes fields from different bands.
+    int snapBandIdx = bandIdx;
+    const Band *snapBand = &bands[snapBandIdx];
+    uint8_t snapStepIdx = snapBand->currentStepIdx;
+    uint8_t snapBwIdx = snapBand->bandwidthIdx;
+    int snapMode = rs.mode;
+    if (snapStepIdx > getLastStep(snapMode))
+      snapStepIdx = defaultStepIdx[snapMode];
+    if (snapBwIdx > getLastBandwidth(snapMode))
+      snapBwIdx = defaultBwIdx[snapMode];
+    const Step *snapStep = &steps[snapMode][snapStepIdx];
+    const Bandwidth *snapBw = &bandwidths[snapMode][snapBwIdx];
+
+    int cal = (snapMode == USB) ? snapBand->usbCal :
+              (snapMode == LSB) ? snapBand->lsbCal : 0;
     int8_t ws = getWiFiStatus();
     String wifiStatusStr = (ws == 2) ? "station" :
                            (ws == 1) ? "ap" :
@@ -161,42 +192,79 @@ void webInit()
     bool squelchIsSnr = rs.squelch[rs.mode] & 0x80;
     int avcIdx = (rs.mode == USB || rs.mode == LSB) ? rs.ssbAvcIdx : rs.amAvcIdx;
 
-    String json;
-    json.reserve(1024);
-    json = "{";
-    json += "\"firmware\":" + String(VER_APP) + ",";
-    json += "\"frequency_khz\":" + String(effFreq < 0 ? 0 : (uint16_t)effFreq) + ",";
-    json += "\"bfo\":" + String(rs.bfo) + ",";
-    json += "\"cal\":" + String(cal) + ",";
-    json += "\"band\":\"" + String(getCurrentBand()->bandName) + "\",";
-    json += "\"mode\":\"" + String(bandModeDesc[rs.mode]) + "\",";
-    json += "\"step\":\"" + String(getCurrentStep()->desc) + "\",";
-    json += "\"bandwidth\":\"" + String(getCurrentBandwidth()->desc) + "\",";
-    json += "\"volume\":" + String(rs.vol) + ",";
-    json += "\"band_min\":" + String(getCurrentBand()->minimumFreq) + ",";
-    json += "\"band_max\":" + String(getCurrentBand()->maximumFreq) + ",";
-    json += "\"agc_index\":" + String(rs.agcIndex) + ",";
-    json += "\"avc_index\":" + String(avcIdx) + ",";
-    json += "\"rssi_dBuv\":" + String(rs.rssi) + ",";
-    json += "\"snr_dB\":" + String(rs.snr) + ",";
-    json += "\"battery_V\":" + String(batteryMonitor()) + ",";
-    json += String("\"muted\":") + (audioIsMuted() ? "true" : "false") + ",";
-    json += String("\"squelch_enabled\":") + (audioIsSquelched() ? "true" : "false") + ",";
-    json += String("\"sleep\":") + (sleepOn() ? "true" : "false") + ",";
-    json += "\"wifi_mode\":\"" + wifiStatusStr + "\",";
-    json += "\"wifi_rssi\":" + String(ws == 2 ? WiFi.RSSI() : 0) + ",";
-    json += "\"ip_address\":\"" + getWiFiIPAddress() + "\",";
-    json += "\"station_name\":\"" + jsonEscape(String(getStationName())) + "\",";
-    json += "\"program_info\":\"" + jsonEscape(String(getProgramInfo())) + "\",";
-    json += "\"rssi\":" + String(rs.rssi) + ",";
-    json += "\"snr\":" + String(rs.snr) + ",";
-    json += String("\"main_muted\":") + (audioIsMainMuted() ? "true" : "false") + ",";
-    json += String("\"squelched\":") + (audioIsSquelched() ? "true" : "false") + ",";
-    json += "\"squelch\":" + String(squelchVal) + ",";
-    json += String("\"squelch_is_snr\":") + (squelchIsSnr ? "true" : "false") + ",";
-    json += "\"theme_idx\":" + String(themeIdx);
-    json += "}";
-    request->send(200, "application/json", json);
+    // Build JSON in a single snprintf — zero heap allocations per request
+    // Build JSON with heap buffer (4KB server task stack can't hold 2KB local)
+    char *buf = (char *)malloc(2048);
+    if (!buf) { request->send(500, "application/json", "{\"error\":\"oom\"}"); return; }
+    snprintf(buf, 2048,
+      "{"
+      "\"firmware\":%d,"
+      "\"frequency_khz\":%d,"
+      "\"bfo\":%d,"
+      "\"cal\":%d,"
+      "\"band\":\"%s\","
+      "\"mode\":\"%s\","
+      "\"step\":\"%s\","
+      "\"bandwidth\":\"%s\","
+      "\"volume\":%u,"
+      "\"band_min\":%u,"
+      "\"band_max\":%u,"
+      "\"agc_index\":%d,"
+      "\"avc_index\":%d,"
+      "\"rssi_dBuv\":%u,"
+      "\"snr_dB\":%u,"
+      "\"battery_V\":%.2f,"
+      "\"muted\":%s,"
+      "\"squelch_enabled\":%s,"
+      "\"sleep\":%s,"
+      "\"wifi_mode\":\"%s\","
+      "\"wifi_rssi\":%d,"
+      "\"ip_address\":\"%s\","
+      "\"station_name\":\"%s\","
+      "\"program_info\":\"%s\","
+      "\"rssi\":%u,"
+      "\"snr\":%u,"
+      "\"main_muted\":%s,"
+      "\"squelched\":%s,"
+      "\"squelch\":%u,"
+      "\"squelch_is_snr\":%s,"
+      "\"theme_idx\":%d"
+      "}",
+      VER_APP,
+      (effFreq < 0) ? 0 : (uint16_t)effFreq,
+      rs.bfo,
+      cal,
+      snapBand->bandName,
+      bandModeDesc[snapMode],
+      snapStep->desc,
+      snapBw->desc,
+      rs.vol,
+      snapBand->minimumFreq,
+      snapBand->maximumFreq,
+      rs.agcIndex,
+      avcIdx,
+      rs.rssi,
+      rs.snr,
+      batteryMonitor(),
+      audioIsMuted() ? "true" : "false",
+      audioIsSquelched() ? "true" : "false",
+      sleepOn() ? "true" : "false",
+      wifiStatusStr,
+      ws == 2 ? WiFi.RSSI() : 0,
+      getWiFiIPAddress().c_str(),
+      jsonEscape(String(getStationName())).c_str(),
+      jsonEscape(String(getProgramInfo())).c_str(),
+      rs.rssi,
+      rs.snr,
+      audioIsMainMuted() ? "true" : "false",
+      audioIsSquelched() ? "true" : "false",
+      squelchVal,
+      squelchIsSnr ? "true" : "false",
+      themeIdx
+    );
+    buf[2047] = '\0';
+    request->send(200, "application/json", buf);
+    free(buf);
   });
 
   // Remote control API with rate limiting (max 20 commands/sec)
@@ -216,15 +284,22 @@ void webInit()
     String value = request->arg("value");
 
     if (cmd == "tune") {
-      uint32_t freqKhz = value.toInt();
-      if (freqKhz <= 0 || freqKhz > 30000) {
+      int v = value.toInt();
+      if (v <= 0 || v > 30000) {
         request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Bad frequency\"}");
         return;
       }
-      uint32_t freqHz = (uint32_t)freqKhz * 1000;
+      // Slider sends radioState.frequency directly.
+      // For FM it is in 10 kHz units (10050 = 100.50 MHz),
+      // for AM/SW it is in kHz.  Accept the raw value so the
+      // slider can set any in-band frequency.
+      uint16_t targetFreq = (uint16_t)v;
+      int targetBfo = 0;
+      if (isSSB()) {
+        targetBfo = bfoFromHz((uint32_t)v * 1000);
+        targetFreq = freqFromHz((uint32_t)v * 1000, radioState.mode);
+      }
       Band *band = getCurrentBand();
-      uint16_t targetFreq = freqFromHz(freqHz, radioState.mode);
-      int targetBfo = isSSB() ? bfoFromHz(freqHz) : 0;
       if (!isFreqInBand(band, targetFreq)) {
         request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Out of band\"}");
         return;
@@ -374,7 +449,9 @@ void webInit()
     // --- brightness: direct value 10-255 ---
     if (cmd == "brightness") {
       int v = constrain(value.toInt(), 10, 255);
-      doBrt(v - radioState.brightness);
+      radioState.brightness = v;
+      ledcWrite(PIN_LCD_BL, v);
+      prefsRequestSave(SAVE_SETTINGS);
       request->send(200, "application/json", "{\"status\":\"ok\"}");
       return;
     }
@@ -594,7 +671,7 @@ void webSetConfig(AsyncWebServerRequest *request)
   {
     String utcOffset = request->getParam("utcoffset", true)->value();
     taskENTER_CRITICAL(&radioStateMux);
-    radioState.utcOffset = constrain(utcOffset.toInt(), -12, 14);
+    radioState.utcOffset = constrain(utcOffset.toInt(), 0, getTotalUTCOffsets() - 1);
     taskEXIT_CRITICAL(&radioStateMux);
     clockRefreshTime();
     prefsSave |= SAVE_SETTINGS;
@@ -636,8 +713,11 @@ static const String webInputField(const String &name, const String &value, bool 
 {
   String newValue(value);
 
+  newValue.replace("&", "&amp;");
   newValue.replace("\"", "&quot;");
   newValue.replace("'", "&apos;");
+  newValue.replace("<", "&lt;");
+  newValue.replace(">", "&gt;");
 
   return(
     "<INPUT TYPE='" + String(pass? "PASSWORD":"TEXT") + "' NAME='" +
@@ -871,6 +951,27 @@ static const String webUtcOffsetSelector()
   return(result);
 }
 
+// Build FM region dropdown options from the fmRegions[] array
+// (covers all regions without hardcoded HTML-labels that can drift)
+static const String webFmRegionOptions()
+{
+  String result;
+  result.reserve(256);
+
+  for(int i=0 ; i<getTotalFmRegions(); i++)
+  {
+    char text[64];
+    snprintf(text, sizeof(text),
+      "<OPTION VALUE='%d'%s>%s</OPTION>",
+      i, radioState.fmRegionIdx==i? " SELECTED":"",
+      fmRegions[i].desc
+    );
+    result += text;
+  }
+
+  return(result);
+}
+
 static const String webThemeSelector()
 {
   String result;
@@ -951,7 +1052,7 @@ static const String webControlsPage()
 "</DIV>"
 "<DIV CLASS='CTRL-ROW'>"
   "<INPUT TYPE='range' MIN='" + String(band->minimumFreq) + "' MAX='" + String(band->maximumFreq) + "' STEP='" + String(step) + "' VALUE='" + String(radioState.frequency) + "' CLASS='SLIDER' ID='fs' STYLE='flex:1;min-width:0' "
-  "ONINPUT=\"document.getElementById('fv').textContent=this.value;fetch('/api/command',{method:'POST',body:'cmd=tune&value='+this.value})\">"
+  "ONINPUT=\"document.getElementById('fv').textContent=this.value;var f=this;clearTimeout(f._t);f._t=setTimeout(function(){fetch('/api/command',{method:'POST',body:'cmd=tune&value='+f.value})},80)\">"
   " <SPAN ID='fv'>" + freqStr + "</SPAN> <SPAN ID='fm'>" + String(bandModeDesc[radioState.mode]) + "</SPAN>"
 "</DIV>"
 "<DIV CLASS='BTN-GROUP'>"
@@ -976,13 +1077,13 @@ static const String webControlsPage()
 // === Audio ===
 "<DIV CLASS='CTRL-ROW'>"
   "Vol: <INPUT TYPE='range' MIN='0' MAX='63' VALUE='" + String(radioState.vol) + "' CLASS='SLIDER' "
-  "ONINPUT=\"document.getElementById('vv').textContent=this.value;fetch('/api/command',{method:'POST',body:'cmd=volume&value='+this.value})\">"
+  "ONINPUT=\"document.getElementById('vv').textContent=this.value;var f=this;clearTimeout(f._t);f._t=setTimeout(function(){fetch('/api/command',{method:'POST',body:'cmd=volume&value='+f.value})},80)\">"
   " <SPAN ID='vv'>" + String(radioState.vol) + "</SPAN>/63"
   " <BUTTON ID='mt' ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=mute&value='+(this.textContent=='Mute')).then(function(){setTimeout(sp,300)})\">Mute</BUTTON>"
 "</DIV>"
 "<DIV CLASS='CTRL-ROW'>"
   "Squelch: <INPUT TYPE='range' MIN='0' MAX='127' VALUE='0' CLASS='SLIDER' ID='sqs' "
-  "ONINPUT=\"document.getElementById('sqv').textContent=this.value;fetch('/api/command',{method:'POST',body:'cmd=squelch&value='+this.value})\">"
+  "ONINPUT=\"document.getElementById('sqv').textContent=this.value;var f=this;clearTimeout(f._t);f._t=setTimeout(function(){fetch('/api/command',{method:'POST',body:'cmd=squelch&value='+f.value})},80)\">"
   " <SPAN ID='sqv'>0</SPAN>"
   " <BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=rssi'})\">RSSI</BUTTON>"
   " <BUTTON ONCLICK=\"fetch('/api/command',{method:'POST',body:'cmd=squelch_param&value=snr'})\">SNR</BUTTON>"
@@ -995,12 +1096,12 @@ static const String webControlsPage()
 // === Settings ===
 "<DIV CLASS='CTRL-ROW'>"
   "AGC: <INPUT TYPE='range' MIN='0' MAX='37' VALUE='" + String(agc) + "' CLASS='SLIDER' ID='agcs' "
-  "ONINPUT=\"document.getElementById('agcv').textContent=this.value;fetch('/api/command',{method:'POST',body:'cmd=agc&value='+this.value})\">"
+  "ONINPUT=\"document.getElementById('agcv').textContent=this.value;var f=this;clearTimeout(f._t);f._t=setTimeout(function(){fetch('/api/command',{method:'POST',body:'cmd=agc&value='+f.value})},80)\">"
   " <SPAN ID='agcv'>" + String(agc) + "</SPAN>/37"
 "</DIV>"
 "<DIV CLASS='CTRL-ROW'>"
   "AVC: <INPUT TYPE='range' MIN='0' MAX='90' VALUE='" + String(avc) + "' CLASS='SLIDER' ID='avcs' "
-  "ONINPUT=\"document.getElementById('avcv').textContent=this.value;fetch('/api/command',{method:'POST',body:'cmd=avc&value='+this.value})\">"
+  "ONINPUT=\"document.getElementById('avcv').textContent=this.value;var f=this;clearTimeout(f._t);f._t=setTimeout(function(){fetch('/api/command',{method:'POST',body:'cmd=avc&value='+f.value})},80)\">"
   " <SPAN ID='avcv'>" + String(avc) + "</SPAN>/90"
 "</DIV>"
 "<DIV CLASS='BTN-GROUP'>"
@@ -1010,7 +1111,7 @@ static const String webControlsPage()
 "</DIV>"
 "<DIV CLASS='CTRL-ROW'>"
   "Brightness: <INPUT TYPE='range' MIN='10' MAX='255' VALUE='" + String(radioState.brightness) + "' CLASS='SLIDER' "
-  "ONINPUT=\"fetch('/api/command',{method:'POST',body:'cmd=brightness&value='+this.value})\">"
+  "ONINPUT=\"var b=this;clearTimeout(b._t);b._t=setTimeout(function(){fetch('/api/command',{method:'POST',body:'cmd=brightness&value='+b.value})},80)\">"
 "</DIV>"
 "<DIV CLASS='BTN-GROUP'>"
   "<BUTTON ONCLICK=\"var b=this;fetch('/api/command',{method:'POST',body:'cmd=sleep&value='+(b.textContent=='Sleep')});b.textContent=b.textContent=='Sleep'?'Wake':'Sleep'\">Sleep</BUTTON>"
@@ -1019,8 +1120,7 @@ static const String webControlsPage()
 "</DIV>"
 "<DIV CLASS='CTRL-ROW'>"
   "FM Region: <SELECT ID='fmr' ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=fm_region&value='+this.value})\">"
-    "<OPTION VALUE='0'>USA</OPTION><OPTION VALUE='1'>Europe</OPTION><OPTION VALUE='2'>Japan</OPTION>"
-  "</SELECT>"
+    + webFmRegionOptions() + "</SELECT>"
   " RDS: <SELECT ID='rds' ONCHANGE=\"fetch('/api/command',{method:'POST',body:'cmd=rds&value='+this.value})\">"
     "<OPTION VALUE='0'>Off</OPTION><OPTION VALUE='1'>PS</OPTION><OPTION VALUE='7'>PS+PI+CT</OPTION>"
   "</SELECT>"

@@ -96,6 +96,12 @@
 // Mutable State
 //
 extern volatile int bandIdx;
+
+// Default step and bandwidth indices per mode (FM, LSB, USB, AM)
+// Used by getCurrentStep()/getCurrentBandwidth() and the web server
+// for consistent band-parameter snapshots.
+extern const uint8_t defaultStepIdx[4];
+extern const uint8_t defaultBwIdx[4];
 extern int8_t menuIdx;
 extern int8_t settingsIdx;
 extern uint8_t memoryIdx;

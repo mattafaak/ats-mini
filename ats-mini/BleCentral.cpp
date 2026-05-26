@@ -6,7 +6,7 @@ static constexpr uint32_t BLE_DISCONNECT_WAIT_MS = 500;
 
 BleCentral::~BleCentral()
 {
-  clearPeer();
+  disconnectClient(false);
 }
 
 void BleCentral::begin(const char* deviceName)
@@ -251,4 +251,6 @@ void BleCentral::disconnectClient(bool wait)
     while (client_->isConnected() && ((uint32_t)(millis() - disconnectStart) < BLE_DISCONNECT_WAIT_MS))
       delay(10);
   }
+  delete client_;
+  client_ = nullptr;
 }

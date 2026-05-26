@@ -175,6 +175,7 @@ static bool remoteSetFrequency(Stream *stream)
 
 static void remoteGetMemories(Stream* stream)
 {
+  portENTER_CRITICAL(&memoriesMux);
   for (uint8_t i = 0; i < getTotalMemories(); i++) {
     if (memories[i].freq) {
       uint8_t b = memories[i].band;
@@ -184,6 +185,7 @@ static void remoteGetMemories(Stream* stream)
       }
     }
   }
+  portEXIT_CRITICAL(&memoriesMux);
 }
 
 static bool remoteSetMemory(Stream* stream)

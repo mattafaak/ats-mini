@@ -364,13 +364,17 @@ void scanToMemoryManual() {
   uint16_t step = getCurrentStep()->step;
   if (radioState.mode != FM && step < 5) step = 5;
 
+  portENTER_CRITICAL(&scanStatusMux);
   memset(&scanStatus, 0, sizeof(scanStatus));
   scanStatus.running = SCAN_RUNNING;
   scanStatus.mode = 1;
   scanStatus.currentFreq = band->minimumFreq;
+  portEXIT_CRITICAL(&scanStatusMux);
 
   audioTempMute(true);
+  portENTER_CRITICAL(&seekStopMux);
   seekStop = false;
+  portEXIT_CRITICAL(&seekStopMux);
   if (isSSB()) updateBFO(0, true);
   updateFrequency(scanStatus.currentFreq, false);
   audioTempMute(false);
@@ -383,11 +387,14 @@ void scanManualStep() {
   uint16_t step = getCurrentStep()->step;
   if (radioState.mode != FM && step < 5) step = 5;
 
+  portENTER_CRITICAL(&scanStatusMux);
   scanStatus.currentFreq += step;
   if (scanStatus.currentFreq > band->maximumFreq) {
     scanStatus.running = SCAN_DONE;
+    portEXIT_CRITICAL(&scanStatusMux);
     return;
   }
+  portEXIT_CRITICAL(&scanStatusMux);
 
   audioTempMute(true);
   if (isSSB()) updateBFO(0, true);
@@ -526,7 +533,9 @@ void scanRequestAuto(uint8_t count)
   portEXIT_CRITICAL(&scanStatusMux);
 
   audioTempMute(true);
+  portENTER_CRITICAL(&seekStopMux);
   seekStop = false;
+  portEXIT_CRITICAL(&seekStopMux);
   if (isSSB()) updateBFO(0, true);
 }
 

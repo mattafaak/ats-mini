@@ -17,7 +17,9 @@
 extern ButtonTracker pb1;
 
 // Current sleep status, returned by sleepOn()
+// Protected by sleepMux since accessed from both web task and main loop
 static bool sleep_on = false;
+static portMUX_TYPE sleepMux = portMUX_INITIALIZER_UNLOCKED;
 
 // Current SSB patch status
 static bool ssbLoaded = false;
@@ -96,9 +98,11 @@ void unloadSSB()
 //
 bool sleepOn(int x)
 {
+  portENTER_CRITICAL(&sleepMux);
   if((x==1) && !sleep_on)
   {
     sleep_on = true;
+    portEXIT_CRITICAL(&sleepMux);
     displaySleep();
 
     // Wait till the button is released to prevent immediate wakeup
@@ -152,6 +156,7 @@ bool sleepOn(int x)
   else if((x==0) && sleep_on)
   {
     sleep_on = false;
+    portEXIT_CRITICAL(&sleepMux);
     displayWake();
     drawScreen();
     displaySetBrightness(radioState.brightness);
@@ -159,7 +164,15 @@ bool sleepOn(int x)
     pb1.reset(); // Reset the button state (its timers could be stale due to CPU sleep)
     { uint32_t _t = millis(); while(pb1.update(digitalRead(ENCODER_PUSH_BUTTON) == LOW, 0).isPressed) { if(millis() - _t > 5000) break; delay(100); } }
   }
+  else
+  {
+    // Query path (x == 2, or non-matching parameters)
+    bool ret = sleep_on;
+    portEXIT_CRITICAL(&sleepMux);
+    return(ret);
+  }
 
+  // Enter or exit path: sleep_on already updated, mutex already released
   return(sleep_on);
 }
 
@@ -228,7 +241,7 @@ bool clockSet(uint8_t hours, uint8_t minutes, uint8_t seconds)
       if(delta <= 10) return false;  // Skip small changes
     }
 
-    clockTimer   = micros();
+    clockTimer   = millis();
     clockHours   = hours;
     clockMinutes = minutes;
     clockSeconds = seconds;
@@ -244,12 +257,12 @@ bool clockSet(uint8_t hours, uint8_t minutes, uint8_t seconds)
 bool clockTickTime()
 {
   // Need to set the clock first, then accumulate one second of time
-  if(clockHasBeenSet && (micros() - clockTimer >= 1000000))
+  if(clockHasBeenSet && (millis() - clockTimer >= 1000))
   {
     uint32_t delta;
 
-    delta = (micros() - clockTimer) / 1000000;
-    clockTimer += delta * 1000000;
+    delta = (millis() - clockTimer) / 1000;
+    clockTimer += delta * 1000;
     clockSeconds += delta;
 
     if(clockSeconds>=60)

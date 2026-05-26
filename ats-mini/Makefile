@@ -35,9 +35,10 @@ HEADERS = \
 SRC = \
 	$(INO) EventHandler.cpp Scheduler.cpp Utils.cpp Rotary.cpp Button.cpp Draw.cpp MenuDraw.cpp Menu.cpp \
 	Station.cpp Battery.cpp Storage.cpp Themes.cpp Remote.cpp \
-	Network.cpp WebServer.cpp RadioDriver.cpp WiFiManager.cpp EIBI.cpp Scan.cpp About.cpp BleMode.cpp \
+	Network.cpp WebServer.cpp RadioDriver.cpp WiFiManager.cpp Tuning.cpp EIBI.cpp Scan.cpp About.cpp BleMode.cpp \
 	BlePeripheral.cpp BleUartPeripheral.cpp \
 	BleCentral.cpp BleHidCentral.cpp \
+	BleBase.cpp \
 	Layout-Default.cpp Layout-SMeter.cpp AudioManager.cpp DisplayController.cpp
 
 all: build

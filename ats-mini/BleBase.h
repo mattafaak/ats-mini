@@ -5,7 +5,7 @@
 
 namespace BleBase {
 
-static inline bool initialized = false;
+extern bool initialized;
 
 inline void init(const char* deviceName)
 {

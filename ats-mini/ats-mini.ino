@@ -201,6 +201,7 @@ void setup()
   // If loading preferences fails...
   if(!prefsLoad(SAVE_SETTINGS|SAVE_VERIFY))
   {
+    Serial.println("Settings invalid — resetting to defaults");
     // Save default preferences
     prefsSave(SAVE_SETTINGS);
     // Show initial screen with the QR code
@@ -213,10 +214,10 @@ void setup()
   }
 
   // If loading memories fails, save default memories
-  if(!prefsLoad(SAVE_MEMORIES|SAVE_VERIFY)) prefsSave(SAVE_MEMORIES);
+  if(!prefsLoad(SAVE_MEMORIES|SAVE_VERIFY)) { Serial.println("Memories invalid — resetting"); prefsSave(SAVE_MEMORIES); }
 
   // If loading bands fails, save default bands
-  if(!prefsLoad(SAVE_BANDS|SAVE_VERIFY)) prefsSave(SAVE_BANDS);
+  if(!prefsLoad(SAVE_BANDS|SAVE_VERIFY)) { Serial.println("Bands invalid — resetting"); prefsSave(SAVE_BANDS); }
 
   // Audio Amplifier Enable. G8PTN: Added
   // After the SI4732 has been setup, enable the audio amplifier

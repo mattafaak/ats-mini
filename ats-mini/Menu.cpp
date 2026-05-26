@@ -305,7 +305,7 @@ static const Step amSteps[] =
 };
 
 const Step *steps[4] = { fmSteps, ssbSteps, ssbSteps, amSteps };
-static const uint8_t defaultStepIdx[4] = { 2, 5, 5, 1 };
+const uint8_t defaultStepIdx[4] = { 2, 5, 5, 1 };
 
 int getLastStep(int mode)
 {
@@ -405,7 +405,7 @@ const Bandwidth *bandwidths[4] =
   fmBandwidths, ssbBandwidths, ssbBandwidths, amBandwidths
 };
 
-static const uint8_t defaultBwIdx[4] = { 0, 4, 4, 4 };
+const uint8_t defaultBwIdx[4] = { 0, 4, 4, 4 };
 
 int getLastBandwidth(int mode)
 {
